@@ -1,0 +1,239 @@
+  /* ---- Variables (identiques à index.php) ---- */
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&display=swap');
+    :root {
+      --bleu-fonce:  #0A1628;
+      --bleu-moyen:  #1B3A6B;
+      --bleu-vif:    #1D6FEB;
+      --bleu-clair:  #E8F0FE;
+      --blanc:       #FFFFFF;
+      --gris-texte:  #94A3B8;
+      --noir:        #060D1A;
+      --rouge:       #E53E3E;
+      --vert:        #38A169;
+      --font-titre: 'Plus Jakarta Sans', sans-serif;
+      --font-corps:  'DM Sans', sans-serif;
+      --rayon:       14px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-titre);
+      background: var(--bleu-fonce);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---- Layout 2 colonnes ---- */
+    .auth-wrapper {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-height: 100vh;
+    }
+
+    /* GAUCHE — panneau bleu décoratif */
+    .auth-panneau {
+      background: linear-gradient(160deg, var(--bleu-moyen) 0%, var(--bleu-fonce) 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 60px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .auth-panneau::before {
+      content: '';
+      position: absolute;
+      width: 400px; height: 400px;
+      border-radius: 50%;
+      background: rgba(29,111,235,0.15);
+      top: -80px; right: -80px;
+    }
+
+    .auth-logo {
+      font-family: var(--font-titre);
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--blanc);
+      text-decoration: none;
+      margin-bottom: 60px;
+      display: block;
+    }
+    .auth-logo span { color: var(--bleu-vif); }
+
+    .panneau-titre {
+      font-family: var(--font-titre);
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--blanc);
+      line-height: 1.2;
+      margin-bottom: 20px;
+    }
+
+    .panneau-desc {
+      color: var(--gris-texte);
+      line-height: 1.7;
+      font-size: 0.95rem;
+    }
+
+    /* Liste des avantages */
+    .avantages {
+      list-style: none;
+      margin-top: 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .avantages li {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--blanc);
+      font-size: 0.88rem;
+    }
+    .avantages li::before {
+      content: '✓';
+      width: 24px; height: 24px;
+      background: rgba(29,111,235,0.3);
+      border: 1px solid var(--bleu-vif);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      color: var(--bleu-vif);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* DROITE — formulaire */
+    .auth-formulaire {
+      background: var(--blanc);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 60px 52px;
+      overflow-y: auto;
+    }
+
+    .form-titre {
+      font-family: var(--font-titre);
+      font-size: 1.7rem;
+      font-weight: 800;
+      color: var(--noir);
+      margin-bottom: 8px;
+    }
+
+    .form-sous-titre {
+      color: #6B7A8E;
+      font-size: 0.9rem;
+      margin-bottom: 32px;
+    }
+
+    /* Messages d'erreur */
+    .alerte {
+      padding: 14px 18px;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+    .alerte-erreur {
+      background: #FFF5F5;
+      border: 1px solid #FEB2B2;
+      color: var(--rouge);
+    }
+    .alerte-erreur ul { margin-left: 16px; }
+
+    /* Grille du formulaire */
+    .form-grille {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .form-grille .pleine-largeur { grid-column: 1 / -1; }
+
+    /* Chaque champ */
+    .champ {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .champ label {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: #374151;
+      letter-spacing: 0.3px;
+    }
+
+    .champ input {
+      padding: 12px 16px;
+      border: 1.5px solid #D1D9E0;
+      border-radius: 10px;
+      font-family: var(--font-corps);
+      font-size: 0.92rem;
+      color: var(--noir);
+      background: var(--blanc);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+
+    .champ input:focus {
+      border-color: var(--bleu-vif);
+      box-shadow: 0 0 0 3px rgba(29,111,235,0.12);
+    }
+
+    .champ input::placeholder { color: #A0AEC0; }
+
+    /* Indice facultatif */
+    .facultatif {
+      font-size: 0.72rem;
+      color: #A0AEC0;
+      font-weight: 400;
+    }
+
+    /* Bouton principal */
+    .btn-principal {
+      width: 100%;
+      padding: 15px;
+      background: var(--bleu-vif);
+      color: var(--blanc);
+      border: none;
+      border-radius: 10px;
+      font-family: var(--font-titre);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 24px;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+    }
+    .btn-principal:hover {
+      background: #1558c0;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(29,111,235,0.35);
+    }
+
+    /* Lien vers connexion */
+    .lien-alternatif {
+      text-align: center;
+      margin-top: 22px;
+      font-size: 0.88rem;
+      color: #6B7A8E;
+    }
+    .lien-alternatif a {
+      color: var(--bleu-vif);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .lien-alternatif a:hover { text-decoration: underline; }
+
+    /* Responsive */
+    @media (max-width: 860px) {
+      .auth-wrapper { grid-template-columns: 1fr; }
+      .auth-panneau { display: none; }
+      .auth-formulaire { padding: 40px 28px; }
+      .form-grille { grid-template-columns: 1fr; }
+    }

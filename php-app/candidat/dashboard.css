@@ -1,0 +1,512 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&display=swap');
+    :root {
+      --bleu-fonce:   #0A1628;
+      --bleu-moyen:   #1B3A6B;
+      --bleu-vif:     #1D6FEB;
+      --bleu-clair:   #E8F0FE;
+      --bleu-pale:    #F4F7FF;
+      --blanc:        #FFFFFF;
+      --gris-texte:   #94A3B8;
+      --gris-bord:    #E2E8F0;
+      --gris-fond:    #F8FAFC;
+      --noir:         #0F172A;
+      --rouge:        #EF4444;
+      --vert:         #22C55E;
+      --orange:       #F59E0B;
+      --font-titre:   'Plus Jakarta Sans', sans-serif;
+      --font-corps:   'DM Sans', sans-serif;
+      --rayon-carte:  16px;
+      --ombre:        0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.05);
+      --ombre-lg:     0 8px 32px rgba(0,0,0,0.10);
+    }
+
+    /* 
+       RESET & BASE
+     */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-corps);
+      background: var(--gris-fond);
+      color: var(--noir);
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /*
+       LAYOUT PRINCIPAL — sidebar fixe + contenu pleine largeur= */
+    .dashboard-layout {
+      display: block;
+      min-height: 100vh;
+    }
+
+    /* ==
+       SIDEBAR
+     */
+    .sidebar {
+      background: var(--bleu-fonce);
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      width: 256px;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      z-index: 100;
+      border-right: 1px solid rgba(255,255,255,0.04);
+    }
+
+    /* ── Logo ── */
+    .sidebar-header { padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .sidebar-logo {
+      display: block;
+      font-family: var(--font-titre);
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: var(--blanc);
+      text-decoration: none;
+      margin-bottom: 20px;
+      letter-spacing: -0.3px;
+    }
+    .sidebar-logo span { color: var(--bleu-vif); }
+
+    /* ── Avatar / nom ── */
+    .sidebar-user { display: flex; align-items: center; gap: 11px; }
+    .user-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--bleu-moyen), var(--bleu-vif));
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-titre); font-size: 0.85rem; font-weight: 700;
+      color: var(--blanc); flex-shrink: 0;
+    }
+    .user-nom  { font-size: 0.85rem; font-weight: 500; color: var(--blanc); }
+    .user-role { font-size: 0.7rem;  color: var(--gris-texte); margin-top: 1px; }
+
+    /* ── Barre de complétion ── */
+    .sidebar-progress { padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .prog-label { display: flex; justify-content: space-between; margin-bottom: 7px; font-size: 0.72rem; color: var(--gris-texte); }
+    .prog-label strong { color: var(--blanc); font-weight: 600; }
+    .prog-barre { height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
+    .prog-fill  { height: 100%; background: var(--bleu-vif); border-radius: 3px; transition: width 1s ease; }
+
+    /* ── Navigation ── */
+    .sidebar-nav { padding: 14px 10px; flex: 1; }
+    .nav-section-label {
+      font-size: 0.6rem; text-transform: uppercase; letter-spacing: 1.2px;
+      color: rgba(255,255,255,0.25); padding: 6px 10px 8px;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: 10px;
+      text-decoration: none; color: rgba(255,255,255,0.55);
+      font-size: 0.84rem; margin-bottom: 2px;
+      transition: all 0.18s;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.06); color: var(--blanc); }
+    .nav-item.actif { background: rgba(29,111,235,0.22); color: var(--blanc); font-weight: 500; }
+    .nav-item.actif .nav-ico svg { color: var(--bleu-vif); }
+    .nav-ico { display: flex; align-items: center; width: 18px; flex-shrink: 0; }
+
+    /* ── Pied de sidebar ── */
+    .sidebar-footer { padding: 12px 10px; border-top: 1px solid rgba(255,255,255,0.06); }
+    .btn-deconnexion-side {
+      display: flex; align-items: center; gap: 9px; padding: 9px 12px;
+      border-radius: 10px; background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.2); color: #FCA5A5;
+      font-size: 0.82rem; text-decoration: none; transition: background 0.18s;
+      font-family: var(--font-corps);
+    }
+    .btn-deconnexion-side:hover { background: rgba(239,68,68,0.18); }
+
+    /* ====
+       CONTENU PRINCIPAL
+    ==== */
+    .main-content {
+      margin-left: 256px;
+      width: calc(100% - 256px);   /* ← clé : occupe tout le reste */
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      background: var(--blanc);
+      padding: 0 32px;
+      height: 60px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--gris-bord);
+      position: sticky; top: 0; z-index: 50;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+    }
+    .topbar-titre {
+      font-family: var(--font-titre);
+      font-size: 1rem; font-weight: 700;
+      color: var(--bleu-fonce);
+      display: flex; align-items: center; gap: 9px;
+    }
+    .topbar-titre svg { color: var(--bleu-vif); flex-shrink: 0; }
+    .topbar-breadcrumb { font-size: 0.72rem; color: var(--gris-texte); margin-top: 1px; }
+    .btn-completer {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 8px 16px; background: var(--bleu-vif); color: var(--blanc);
+      border-radius: 9px; font-size: 0.8rem; font-weight: 500;
+      text-decoration: none; transition: background 0.18s;
+    }
+    .btn-completer:hover { background: #1558c0; }
+
+    /* ── Page body ── */
+    .page-body { padding: 28px 32px; flex: 1; width: 100%; box-sizing: border-box; }
+
+    /* ── Flash message ── */
+    .flash {
+      display: flex; align-items: center; gap: 10px;
+      padding: 13px 16px; border-radius: 12px;
+      font-size: 0.86rem; margin-bottom: 24px;
+    }
+    .flash svg { flex-shrink: 0; }
+    .flash-succes { background: #F0FDF4; border: 1px solid #BBF7D0; color: #15803D; }
+    .flash-erreur { background: #FEF2F2; border: 1px solid #FECACA; color: #DC2626; }
+
+    /* =
+       GRILLE DE STATISTIQUES (onglet aperçu)
+    ===*/
+    .stats-grille {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-carte {
+      background: var(--blanc);
+      border-radius: var(--rayon-carte);
+      padding: 20px;
+      box-shadow: var(--ombre);
+      border: 1px solid var(--gris-bord);
+      display: flex; align-items: center; gap: 14px;
+      transition: box-shadow 0.2s;
+    }
+    .stat-carte:hover { box-shadow: var(--ombre-lg); }
+
+    /* Icônes des stats — carrés arrondis colorés */
+    .stat-icone {
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .stat-icone.bleu   { background: var(--bleu-clair); color: var(--bleu-vif); }
+    .stat-icone.vert   { background: #DCFCE7; color: #16A34A; }
+    .stat-icone.orange { background: #FEF3C7; color: #D97706; }
+    .stat-icone.gris   { background: var(--gris-fond); color: #64748B; }
+
+    .stat-valeur { font-family: var(--font-titre); font-size: 1.55rem; font-weight: 700; color: var(--bleu-fonce); line-height: 1; }
+    .stat-label  { font-size: 0.74rem; color: var(--gris-texte); margin-top: 4px; }
+
+    /* =============
+       CARTE PROFIL APERÇU
+     */
+    .profil-apercu-carte {
+      background: var(--blanc);
+      border-radius: var(--rayon-carte);
+      padding: 28px;
+      box-shadow: var(--ombre);
+      border: 1px solid var(--gris-bord);
+      margin-bottom: 20px;
+      display: flex; align-items: flex-start; gap: 22px;
+    }
+    .profil-avatar-lg {
+      width: 76px; height: 76px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--bleu-moyen), var(--bleu-vif));
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-titre); font-size: 1.6rem; font-weight: 700;
+      color: var(--blanc); flex-shrink: 0;
+    }
+    .profil-nom   { font-family: var(--font-titre); font-size: 1.2rem; font-weight: 700; color: var(--bleu-fonce); }
+    .profil-poste { color: var(--bleu-vif); font-size: 0.85rem; font-weight: 500; margin-top: 3px; }
+    .profil-meta  { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; }
+    .meta-item    { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #4A5A72; }
+    .meta-item svg { flex-shrink: 0; color: var(--bleu-vif); }
+    .tags-competences { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    .tag-comp {
+      background: var(--bleu-clair); color: var(--bleu-moyen);
+      font-size: 0.72rem; font-weight: 600;
+      padding: 3px 10px; border-radius: 20px;
+    }
+    .profil-score-bloc { margin-left: auto; text-align: center; flex-shrink: 0; }
+    .score-cercle-lg {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  /* On enlève le background d'ici */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+    .score-cercle-lg::before {
+      content: ''; position: absolute;
+      width: 56px; height: 56px; background: var(--blanc); border-radius: 50%;
+    }
+    .score-pct-lg { font-family: var(--font-titre); font-size: 0.9rem; font-weight: 700; color: var(--bleu-fonce); position: relative; z-index: 1; }
+    .score-sous   { font-size: 0.68rem; color: var(--gris-texte); margin-top: 6px; line-height: 1.3; }
+
+    /* ==
+       CARTE FORMULAIRE GÉNÉRIQUE (form-carte)
+       Utilisée dans tous les onglets de formulaire
+     */
+    .form-carte {
+      background: var(--blanc);
+      border-radius: var(--rayon-carte);
+      padding: 28px 28px 24px;
+      box-shadow: var(--ombre);
+      border: 1px solid var(--gris-bord);
+      margin-bottom: 20px;
+    }
+
+    /* En-tête de la carte */
+    .form-carte-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 4px;
+    }
+    /* Icône carrée dans l'en-tête */
+    .form-carte-ico {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: var(--bleu-clair);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--bleu-vif); flex-shrink: 0;
+    }
+    .form-carte-titre {
+      font-family: var(--font-titre);
+      font-size: 1rem; font-weight: 700;
+      color: var(--bleu-fonce);
+    }
+
+    /* Ligne séparatrice sous le titre */
+    .form-carte-sep {
+      height: 1px; background: var(--gris-bord);
+      margin: 16px 0;
+    }
+
+    .form-carte-desc { font-size: 0.82rem; color: var(--gris-texte); margin-top: 4px; }
+
+    /* ── Grille de champs 2 colonnes ── */
+    .form-grille { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-grille .pleine { grid-column: 1 / -1; }
+
+    /* ── Champ individuel ── */
+    .champ-g { display: flex; flex-direction: column; gap: 5px; }
+    .champ-g label {
+      font-size: 0.76rem; font-weight: 500; color: #374151;
+      display: flex; align-items: center; gap: 6px; letter-spacing: 0.2px;
+    }
+    .champ-g label svg { color: var(--bleu-vif); flex-shrink: 0; }
+    .champ-g input,
+    .champ-g select,
+    .champ-g textarea {
+      padding: 10px 13px;
+      border: 1.5px solid var(--gris-bord);
+      border-radius: 10px;
+      font-family: var(--font-corps);
+      font-size: 0.87rem;
+      color: var(--noir);
+      background: var(--blanc);
+      outline: none;
+      transition: border-color 0.18s, box-shadow 0.18s;
+      width: 100%;
+    }
+    .champ-g input:focus,
+    .champ-g select:focus,
+    .champ-g textarea:focus {
+      border-color: var(--bleu-vif);
+      box-shadow: 0 0 0 3px rgba(29,111,235,0.1);
+    }
+    .champ-g input::placeholder { color: #C1CBD7; }
+    .champ-g input:disabled      { opacity: 0.55; cursor: not-allowed; background: var(--gris-fond); }
+    .champ-g textarea { resize: vertical; min-height: 88px; line-height: 1.55; }
+
+    /* ── Pied de la carte (bouton) ── */
+    .form-footer {
+      display: flex; justify-content: flex-end;
+      padding-top: 18px;
+      margin-top: 6px;
+      border-top: 1px solid var(--gris-bord);
+    }
+    .btn-save {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 24px;
+      background: var(--bleu-vif); color: var(--blanc);
+      border: none; border-radius: 10px;
+      font-family: var(--font-titre); font-size: 0.86rem; font-weight: 600;
+      cursor: pointer; transition: background 0.18s, transform 0.12s;
+    }
+    .btn-save:hover { background: #1558c0; transform: translateY(-1px); }
+
+    /* =======
+       CARTE CONSEILS (onglet aperçu)
+    =*/
+    .carte-conseils {
+      background: var(--blanc);
+      border: 1px solid var(--bleu-clair);
+      border-left: 4px solid var(--bleu-vif);
+      border-radius: var(--rayon-carte);
+      padding: 22px 24px;
+      margin-bottom: 20px;
+    }
+    .carte-conseils-titre {
+      font-family: var(--font-titre);
+      font-size: 0.9rem; font-weight: 700;
+      color: var(--bleu-fonce);
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 6px;
+    }
+    .carte-conseils-desc { font-size: 0.8rem; color: var(--gris-texte); margin-bottom: 14px; }
+    .conseils-liste { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .conseils-liste li {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.83rem; color: #374151;
+    }
+    .conseil-puce {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: var(--bleu-clair); color: var(--bleu-vif);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* =
+       HISTORIQUE CV (onglet cv)*/
+    .cv-liste { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+    .cv-item {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 16px;
+      background: var(--gris-fond);
+      border: 1px solid var(--gris-bord);
+      border-radius: 12px;
+      transition: border-color 0.18s;
+    }
+    .cv-item:first-child { background: var(--bleu-pale); border-color: var(--bleu-clair); }
+    .cv-item:hover { border-color: var(--bleu-vif); }
+
+    .cv-item-icone {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: var(--blanc); border: 1px solid var(--gris-bord);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--bleu-vif); flex-shrink: 0;
+    }
+    .cv-item-nom   { font-weight: 500; font-size: 0.87rem; color: var(--bleu-fonce); }
+    .cv-item-meta  { font-size: 0.73rem; color: var(--gris-texte); margin-top: 2px; }
+    .cv-actuel-badge {
+      background: var(--bleu-vif); color: var(--blanc);
+      font-size: 0.64rem; font-weight: 700;
+      padding: 2px 8px; border-radius: 8px; margin-left: 6px;
+      vertical-align: middle;
+    }
+    .cv-statut { margin-left: auto; font-size: 0.72rem; font-weight: 600; padding: 4px 10px; border-radius: 20px; white-space: nowrap; }
+    .statut-analyse    { background: #DCFCE7; color: #15803D; }
+    .statut-en_attente { background: #FEF3C7; color: #B45309; }
+    .statut-erreur     { background: #FEF2F2; color: #DC2626; }
+
+    /* Zone upload CV */
+    .zone-upload-mini {
+      border: 2px dashed var(--gris-bord);
+      border-radius: 12px; padding: 28px 20px; text-align: center;
+      cursor: pointer; background: var(--gris-fond);
+      transition: border-color 0.18s, background 0.18s;
+    }
+    .zone-upload-mini:hover { border-color: var(--bleu-vif); background: var(--bleu-pale); }
+    .zone-upload-mini-ico {
+      width: 48px; height: 48px; border-radius: 14px;
+      background: var(--bleu-clair); color: var(--bleu-vif);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 12px;
+    }
+    .zone-upload-mini p       { font-size: 0.86rem; color: #374151; }
+    .zone-upload-mini p strong { color: var(--bleu-fonce); }
+    .zone-upload-mini small   { font-size: 0.72rem; color: var(--gris-texte); display: block; margin-top: 5px; }
+
+    /* Aperçu fichier sélectionné */
+    .cv-preview-box {
+      display: none; align-items: center; gap: 12px;
+      padding: 12px 16px; background: #F0FDF4;
+      border: 1px solid #BBF7D0; border-radius: 10px; margin-top: 12px;
+    }
+    .cv-preview-box.visible { display: flex; }
+
+    /* ==
+       SÉCURITÉ
+    */
+    .securite-info {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px; background: var(--bleu-pale);
+      border: 1px solid var(--bleu-clair); border-radius: 10px;
+      margin-bottom: 20px; font-size: 0.84rem; color: var(--bleu-moyen);
+    }
+    .infos-compte {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 16px;
+    }
+    .info-compte-item strong {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.74rem; color: var(--gris-texte);
+      text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px;
+    }
+    .info-compte-item span { font-size: 0.86rem; color: var(--bleu-fonce); font-weight: 500; }
+
+    /* =
+       HAMBURGER MENU — bouton visible sur mobile uniquement
+    =*/
+    .btn-hamburger {
+      display: none;                /* caché sur desktop */
+      width: 38px; height: 38px;
+      background: var(--blanc);
+      border: 1px solid var(--gris-bord);
+      border-radius: 9px;
+      align-items: center; justify-content: center;
+      cursor: pointer; color: var(--bleu-fonce);
+      flex-shrink: 0;
+    }
+
+    /* Overlay sombre quand sidebar ouverte sur mobile */
+    .sidebar-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(10,22,40,0.6);
+      z-index: 99;
+      backdrop-filter: blur(2px);
+    }
+    .sidebar-overlay.visible { display: block; }
+
+    /* Sidebar fermée sur mobile : on la sort à gauche */
+    .sidebar.ouverte { transform: translateX(0) !important; }
+
+    /* =
+       RESPONSIVE
+    =*/
+    @media (max-width: 1024px) {
+      .stats-grille { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 900px) {
+      /* Sur mobile, sidebar se cache hors écran par défaut */
+      .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+      }
+      /* Le main prend toute la largeur */
+      .main-content {
+        margin-left: 0;
+        width: 100%;
+      }
+      /* Hamburger visible */
+      .btn-hamburger { display: flex; }
+      /* Aperçu profil en colonne */
+      .profil-apercu-carte { flex-wrap: wrap; }
+    }
+
+    @media (max-width: 640px) {
+      .page-body { padding: 14px 16px; }
+      .form-grille { grid-template-columns: 1fr; }
+      .stats-grille { grid-template-columns: 1fr 1fr; }
+      .infos-compte { grid-template-columns: 1fr; }
+      .topbar { padding: 0 16px; }
+      .topbar-titre { font-size: 0.9rem; }
+    }

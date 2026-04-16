@@ -1,0 +1,86 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&display=swap');
+:root {
+      --bleu-fonce:#0A1628; --bleu-moyen:#1B3A6B; --bleu-vif:#1D6FEB;
+      --bleu-clair:#E8F0FE; --blanc:#FFFFFF; --gris-texte:#94A3B8;
+      --gris-bord:#D1D9E0; --noir:#060D1A; --rouge:#E53E3E; --vert:#38A169;
+      --font-titre:'Plus Jakarta Sans', sans-serif;
+      --font-corps:'DM Sans',sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-corps);background:var(--bleu-fonce);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;position:relative;overflow:hidden}
+    /* Cercle décoratif fond */
+    body::before{content:'';position:fixed;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(29,111,235,0.08) 0%,transparent 70%);top:-200px;right:-200px;pointer-events:none}
+
+    /* ── Carte centrale ── */
+    .login-carte{background:var(--blanc);border-radius:20px;width:100%;max-width:480px;padding:46px 42px;box-shadow:0 24px 80px rgba(0,0,0,0.4);animation:slideUp .45s ease}
+    @keyframes slideUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+
+    /* Logo */
+    .logo-lien{display:flex;align-items:center;gap:8px;justify-content:center;font-family:var(--font-titre);font-size:1.35rem;font-weight:800;color:var(--noir);text-decoration:none;margin-bottom:24px}
+    .logo-lien span{color:var(--bleu-vif)}
+
+    /* Badge admin */
+    .badge-admin{display:flex;align-items:center;justify-content:center;gap:7px;background:#F0F4FF;border:1px solid #C7D8FF;color:var(--bleu-moyen);font-size:0.7rem;font-weight:600;padding:6px 14px;border-radius:20px;margin:0 auto 18px;width:fit-content;text-transform:uppercase;letter-spacing:.5px}
+
+    .login-titre{font-family:var(--font-titre);font-size:1.45rem;font-weight:800;color:var(--noir);text-align:center;margin-bottom:5px}
+    .login-sous-titre{text-align:center;color:#6B7A8E;font-size:0.84rem;margin-bottom:24px}
+
+    /* Alertes */
+    .alerte{padding:11px 15px;border-radius:10px;font-size:0.84rem;margin-bottom:18px;text-align:center;display:flex;align-items:center;justify-content:center;gap:8px}
+    .alerte-erreur{background:#FFF5F5;border:1px solid #FEB2B2;color:var(--rouge)}
+    .alerte-succes{background:#F0FFF4;border:1px solid #9AE6B4;color:var(--vert)}
+
+    /* Onglets Mot de passe / Face ID */
+    .onglets{display:grid;grid-template-columns:1fr 1fr;gap:5px;background:#F1F5F9;padding:5px;border-radius:12px;margin-bottom:24px}
+    .onglet{padding:10px;border:none;border-radius:9px;font-family:var(--font-titre);font-size:0.8rem;font-weight:600;cursor:pointer;transition:all .2s;background:transparent;color:#6B7A8E;display:flex;align-items:center;justify-content:center;gap:7px}
+    .onglet.actif{background:var(--blanc);color:var(--bleu-vif);box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+    .panneau{display:none}
+    .panneau.actif{display:block;animation:fadeIn .3s ease}
+    @keyframes fadeIn{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}}
+
+    /* Champs */
+    .champ{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+    .champ label{font-size:0.8rem;font-weight:500;color:#374151;display:flex;align-items:center;gap:7px}
+    .champ input{padding:12px 15px;border:1.5px solid var(--gris-bord);border-radius:10px;font-family:var(--font-corps);font-size:0.9rem;color:var(--noir);outline:none;transition:border-color .2s,box-shadow .2s}
+    .champ input:focus{border-color:var(--bleu-vif);box-shadow:0 0 0 3px rgba(29,111,235,0.1)}
+
+    .login-options{display:flex;justify-content:flex-end;margin-bottom:18px}
+    .oublie{font-size:0.8rem;color:var(--bleu-vif);text-decoration:none}
+
+    .btn-principal{width:100%;padding:14px;background:var(--bleu-vif);color:var(--blanc);border:none;border-radius:10px;font-family:var(--font-titre);font-size:0.95rem;font-weight:700;cursor:pointer;transition:background .2s,transform .15s,box-shadow .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+    .btn-principal:hover{background:#1558c0;transform:translateY(-1px);box-shadow:0 5px 18px rgba(29,111,235,0.35)}
+
+    /* ── Zone Face ID ── */
+    .faceid-zone{display:flex;flex-direction:column;align-items:center;gap:18px;padding:8px 0}
+
+    /* Cercle de scan animé */
+    .faceid-scanner{width:150px;height:150px;border-radius:50%;border:2.5px solid var(--gris-bord);display:flex;align-items:center;justify-content:center;position:relative;transition:border-color .3s}
+    .faceid-scanner.scan-actif{border-color:var(--bleu-vif);animation:scanPulse 1.4s infinite}
+    .faceid-scanner.scan-succes{border-color:var(--vert)}
+    .faceid-scanner.scan-echec{border-color:var(--rouge)}
+    @keyframes scanPulse{0%,100%{box-shadow:0 0 0 0 rgba(29,111,235,0.25)}50%{box-shadow:0 0 0 14px rgba(29,111,235,0)}}
+
+    /* Ligne de scan animée (uniquement pendant scan-actif) */
+    .scan-ligne{position:absolute;width:78%;height:2px;background:var(--bleu-vif);border-radius:2px;opacity:0;transition:opacity .2s}
+    .faceid-scanner.scan-actif .scan-ligne{opacity:1;animation:scanLigne 1.4s ease-in-out infinite}
+    @keyframes scanLigne{0%{top:20%}100%{top:80%}}
+
+    /* Icône SVG dans le cercle */
+    .faceid-icone{display:flex;align-items:center;justify-content:center}
+
+    .faceid-label{font-size:0.86rem;color:#4A5A72;text-align:center;line-height:1.5}
+
+    /* Statut de scan */
+    .faceid-statut{font-size:0.8rem;padding:8px 16px;border-radius:9px;text-align:center;display:none;align-items:center;gap:7px}
+    .faceid-statut.attente{background:#FFF8E1;color:#B7791F;display:flex}
+    .faceid-statut.succes{background:#F0FFF4;color:var(--vert);display:flex}
+    .faceid-statut.echec{background:#FFF5F5;color:var(--rouge);display:flex}
+
+    .btn-scanner{padding:12px 26px;background:var(--bleu-fonce);color:var(--blanc);border:none;border-radius:10px;font-family:var(--font-titre);font-size:0.88rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .2s}
+    .btn-scanner:hover{background:var(--bleu-moyen)}
+    .btn-scanner:disabled{opacity:.55;cursor:not-allowed}
+
+    .lien-alternatif{text-align:center;margin-top:18px;font-size:0.84rem;color:#6B7A8E}
+    .lien-alternatif a{color:var(--bleu-vif);text-decoration:none;font-weight:500}
+    .retour{display:block;text-align:center;margin-top:12px;font-size:0.78rem;color:#A0AEC0;text-decoration:none}
+    @media(max-width:480px){.login-carte{padding:32px 20px}}

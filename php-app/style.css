@@ -1,0 +1,589 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&display=swap');
+    /* VARIABLES — modifier ici pour changer les couleurs */
+    :root {
+      --bleu-fonce:   #0A1628;   
+      --bleu-moyen:  #1B3A6B;   /* blocs intermédiaires */
+      --bleu-vif:    #1D6FEB;   /* accent principal */
+      --bleu-clair:  #E8F0FE;  
+      --blanc:       #FFFFFF;
+      --gris-texte:  #94A3B8;   /* texte secondaire */
+      --noir:        #060D1A;
+
+      --font-titre: 'Plus Jakarta Sans', sans-serif;
+      --font-corps: 'DM Sans', sans-serif;
+
+      --rayon:  14px;            /* arrondi des cartes */
+      --ombre:  0 8px 40px rgba(0,0,0,0.18);
+    }
+
+    /* RESET & BASE */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-corps);
+      background: var(--bleu-fonce);
+      color: var(--blanc);
+      overflow-x: hidden;
+    }
+
+    /* BARRE DE NAVIGATION*/
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 6%;
+      background: rgba(10, 22, 40, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .logo {
+      font-family: var(--font-titre);
+      font-weight: 800;
+      font-size: 1.4rem;
+      letter-spacing: -0.5px;
+      color: var(--blanc);
+      text-decoration: none;
+    }
+
+    .logo span { color: var(--bleu-vif); }
+
+    .nav-liens {
+      display: flex;
+      gap: 12px;
+    }
+
+    .bandeau-alerte {
+    width: 100%;
+    background-color: var(--primary-navy, #1A2A6C); /* Ton bleu pro */
+    color: white; /* Texte blanc pour le contraste */
+    padding: 10px 0;
+    overflow: hidden;
+    position: relative;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+    font-family: var(--font-titre, sans-serif);
+    font-weight: 700;
+    font-size: 0.9rem;
+    letter-spacing: 1px;
+    z-index: 9999;
+}
+
+.scroll-texte {
+    display: flex;
+    white-space: nowrap;
+    width: max-content;
+    animation: defilement 20s linear infinite;
+}
+
+.scroll-texte span {
+    padding-right: 50px; /* Espace entre les deux messages */
+}
+
+    /* Bouton nav générique */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-family: var(--font-corps);
+      font-size: 0.9rem;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+    }
+
+    /* Bouton contour blanc */
+    .btn-outline {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.25);
+      color: var(--blanc);
+    }
+    .btn-outline:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.5);
+    }
+
+    /* Bouton plein bleu */
+    .btn-bleu {
+      background: var(--bleu-vif);
+      color: var(--blanc);
+    }
+    .btn-bleu:hover {
+      background: #1558c0;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(29,111,235,0.4);
+    }
+
+    /*  SECTION HERO — occupe 100vh (toute la fenêtre) */
+    .hero {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;   /* gauche : texte | droite : image CV */
+      align-items: center;
+      padding: 0 6%;
+      padding-top: 80px;                /* compensation nav fixe */
+      gap: 60px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Fond décoratif (cercle flou en arrière-plan) */
+    .hero::before {
+      content: '';
+      position: absolute;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(29,111,235,0.18) 0%, transparent 70%);
+      top: -100px; right: -100px;
+      pointer-events: none;
+    }
+
+    /* ----- CÔTÉ GAUCHE : texte de présentation ----- */
+    .hero-texte {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      animation: fadeInLeft 0.8s ease both;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(29,111,235,0.15);
+      border: 1px solid rgba(29,111,235,0.35);
+      color: #78AAFF;
+      font-size: 0.78rem;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 20px;
+      width: fit-content;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--bleu-vif);
+      animation: pulse 1.8s infinite;
+    }
+
+    .hero-titre {
+      font-family: var(--font-titre);
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -1px;
+    }
+
+    .hero-titre .accent { color: var(--bleu-vif); }
+
+    .hero-description {
+      font-size: 1.05rem;
+      line-height: 1.75;
+      color: var(--gris-texte);
+      max-width: 480px;
+    }
+
+    /* Statistiques rapides sous le texte */
+    .stats {
+      display: flex;
+      gap: 32px;
+      padding-top: 8px;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-nombre {
+      font-family: var(--font-titre);
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--blanc);
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--gris-texte);
+      margin-top: 2px;
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    /* Lien "scroll vers le bas" animé */
+    .scroll-hint {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--gris-texte);
+      font-size: 0.85rem;
+      margin-top: 16px;
+      animation: bounce 2s infinite;
+    }
+
+    .scroll-hint svg { opacity: 0.6; }
+
+    /* -- CÔTÉ DROIT : visuel CV -- */
+    .hero-visuel {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      animation: fadeInRight 0.7s ease both;
+      position: relative;
+    }
+
+    /* Carte CV mockup */
+    .cv-mockup {
+      background: var(--blanc);
+      color: var(--noir);
+      border-radius: var(--rayon);
+      padding: 30px;
+      width: 340px;
+      box-shadow: var(--ombre), 0 0 0 1px rgba(255,255,255,0.05);
+      position: relative;
+      transform: rotate(2deg);
+      transition: transform 0.4s ease;
+    }
+
+    .cv-mockup:hover { transform: rotate(0deg) scale(1.02); }
+
+    /* Badge IA flottant sur le CV */
+    .badge-ia {
+      position: absolute;
+      top: -16px; right: -16px;
+      background: var(--bleu-vif);
+      color: var(--blanc);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 8px 14px;
+      border-radius: 20px;
+      box-shadow: 0 4px 16px rgba(29,111,235,0.5);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .cv-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .cv-avatar {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--bleu-moyen), var(--bleu-vif));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--blanc);
+      font-family: var(--font-titre);
+      font-size: 1.2rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .cv-nom { font-family: var(--font-titre); font-size: 1rem; font-weight: 700; color: var(--noir); }
+    .cv-poste { font-size: 0.78rem; color: #555; margin-top: 2px; }
+
+    .cv-ligne {
+      height: 8px;
+      border-radius: 4px;
+      background: #E5EAF0;
+      margin-bottom: 8px;
+    }
+    .cv-ligne.w-90 { width: 90%; }
+    .cv-ligne.w-70 { width: 70%; }
+    .cv-ligne.w-80 { width: 80%; }
+    .cv-ligne.w-50 { width: 50%; }
+
+    .cv-section-titre {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--bleu-vif);
+      font-weight: 600;
+      margin: 16px 0 8px;
+    }
+
+    /* Tags de compétences sur le CV */
+    .cv-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .cv-tag {
+      background: var(--bleu-clair);
+      color: var(--bleu-moyen);
+      font-size: 0.7rem;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 12px;
+    }
+
+    /* Score de matching flottant */
+    .score-badge {
+      position: absolute;
+      bottom: -20px; left: -20px;
+      background: var(--bleu-fonce);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: var(--ombre);
+    }
+
+    .score-cercle {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: conic-gradient(var(--bleu-vif) 0% 92%, rgba(255,255,255,0.1) 92%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-titre);
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--blanc);
+    }
+
+    .score-texte .score-pct { font-weight: 700; font-size: 1rem; color: var(--blanc); }
+    .score-texte .score-label { font-size: 0.72rem; color: var(--gris-texte); }
+
+    /* SECTION CHOIX DU RÔLE — en dessous du hero */
+    .section-roles {
+      background: var(--bleu-clair);
+      padding: 90px 6%;
+    }
+
+    .section-titre {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .section-titre h2 {
+      font-family: var(--font-titre);
+      font-size: clamp(1.6rem, 3vw, 2.4rem);
+      font-weight: 800;
+      color: var(--bleu-fonce);
+      letter-spacing: -0.5px;
+    }
+
+    .section-titre p {
+      color: #4A5A72;
+      margin-top: 12px;
+      font-size: 1rem;
+    }
+
+    /* Grille 2 cartes de rôle */
+    .grille-roles {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Carte de rôle cliquable */
+    .carte-role {
+      background: var(--blanc);
+      border-radius: var(--rayon);
+      padding: 44px 36px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 18px;
+      text-decoration: none;
+      color: var(--bleu-fonce);
+      border: 2px solid transparent;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      transition: all 0.3s ease;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Barre colorée en haut de chaque carte */
+    .carte-role::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: var(--bleu-vif);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.3s ease;
+    }
+
+    .carte-role:hover::before { transform: scaleX(1); }
+
+    .carte-role:hover {
+      border-color: var(--bleu-vif);
+      transform: translateY(-6px);
+      box-shadow: 0 16px 48px rgba(29,111,235,0.18);
+    }
+
+    /* Icône dans un cercle */
+    .role-icone {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      transition: transform 0.3s ease;
+    }
+
+    .carte-role:hover .role-icone { transform: scale(1.1) rotate(-5deg); }
+
+    .role-icone.bleu     { background: rgba(29,111,235,0.12); }
+    .role-icone.fonce    { background: rgba(10,22,40,0.08); }
+
+    .role-titre {
+      font-family: var(--font-titre);
+      font-size: 1.3rem;
+      font-weight: 700;
+    }
+    
+    .role-desc {
+      font-size: 0.92rem;
+      line-height: 1.65;
+      color: #4A5A72;
+    }
+
+    /* Liste des actions disponibles pour chaque rôle */
+    .role-liste {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+      text-align: left;
+    }
+
+    .role-liste li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+      color: #3D4F66;
+    }
+
+    .role-liste li::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--bleu-vif);
+      flex-shrink: 0;
+    }
+
+    /* Bouton d'action en bas de chaque carte */
+    .carte-role .btn-role {
+      width: 100%;
+      justify-content: center;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+
+    .btn-role-bleu {
+      background: var(--bleu-vif);
+      color: var(--blanc);
+      transition: background 0.2s;
+    }
+    .btn-role-bleu:hover { background: #1558c0; }
+
+    .btn-role-fonce {
+      background: var(--bleu-fonce);
+      color: var(--blanc);
+      transition: background 0.2s;
+    }
+    .btn-role-fonce:hover { background: #0d2040; }
+
+    /* FOOTER */
+    footer {
+      background: var(--noir);
+      text-align: center;
+      padding: 28px;
+      color: var(--gris-texte);
+      font-size: 0.82rem;
+      border-top: 1px solid rgba(255,255,255,0.05);
+    }
+
+    footer strong { color: var(--blanc); }
+
+    /* ANIMATIONS */
+    @keyframes fadeInLeft {
+      from { opacity: 0; transform: translateX(-30px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    @keyframes fadeInRight {
+      from { opacity: 0; transform: translateX(30px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(1.3); }
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(6px); }
+    }
+
+    /*  RESPONSIVE — tablettes et mobiles */
+    @media (max-width: 900px) {
+      .hero {
+        grid-template-columns: 1fr;
+        text-align: center;
+        padding-top: 100px;
+        gap: 50px;
+      }
+
+      .hero-description { max-width: 100%; }
+      .hero-cta { justify-content: center; }
+      .stats { justify-content: center; }
+      .scroll-hint { justify-content: center; }
+
+      .hero-visuel { order: -1; }
+
+      .cv-mockup { width: 280px; transform: rotate(0); }
+      .score-badge { display: none; }
+
+      .grille-roles { grid-template-columns: 1fr; max-width: 480px; }
+    }
+
+    @media (max-width: 480px) {
+      nav { padding: 14px 4%; }
+      .hero { padding: 80px 4% 40px; }
+      .section-roles { padding: 60px 4%; }
+      .carte-role { padding: 32px 24px; }
+      .nav-liens .btn-outline { display: none; }
+    }
