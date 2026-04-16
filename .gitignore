@@ -3,8 +3,7 @@
 # ============================================
 .env
 .env.local
-.env.*.local
-**/config/config.php  
+.env.*.local  
 *.pem
 *.key
 *secret*
