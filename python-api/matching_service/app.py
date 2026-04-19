@@ -27,12 +27,13 @@ load_dotenv()
 #  CONFIGURATION (modifiez uniquement cette section)
 # ================================================================
 
-DB = {
-    "host":     os.getenv("DB_HOST",     "localhost"),
-    "database": os.getenv("DB_NAME",     "projetb"),   # ← votre base
-    "user":     os.getenv("DB_USER",     "root"),
+DB_CONFIG = {
+    "host": os.getenv("DB_HOST", "localhost"),
+    "port": int(os.getenv("DB_PORT", 3306)),  
+    "database": os.getenv("DB_NAME", "projetb"),
+    "user": os.getenv("DB_USER", "root"),
     "password": os.getenv("DB_PASSWORD", ""),
-    "charset":  "utf8mb4",
+    "charset": "utf8mb4"
 }
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
