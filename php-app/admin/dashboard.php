@@ -13,7 +13,7 @@ $admin_id  = $_SESSION['admin_id'];
 $admin_nom = $_SESSION['admin_nom'] ?? 'Administrateur';
 $pdo       = connexionDB();
 
-define('API_GROQ_URL', 'http://localhost:5001');
+define('API_GROQ_URL', getenv('MATCHING_API_URL') ?: 'http://localhost:5001');
 
 $stmtAdmin = $pdo->prepare("SELECT * FROM administrateurs WHERE id = ?");
 $stmtAdmin->execute([$admin_id]);
