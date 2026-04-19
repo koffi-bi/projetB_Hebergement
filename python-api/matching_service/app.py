@@ -27,7 +27,7 @@ load_dotenv()
 #  CONFIGURATION (modifiez uniquement cette section)
 # ================================================================
 
-DB_CONFIG = {
+DB = {
     "host": os.getenv("DB_HOST", "localhost"),
     "port": int(os.getenv("DB_PORT", 3306)),  
     "database": os.getenv("DB_NAME", "projetb"),
