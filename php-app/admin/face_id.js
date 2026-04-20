@@ -2,7 +2,7 @@
 // face_id.js — Interface Face ID avec Google Cloud Vision
 // ============================================================
 
-const FACEID_URL = 'https://faceid-service.onrender.com'; // À adapter à votre URL Render
+const FACEID_URL = 'https://faceid-service-827v.onrender.com'; // À adapter à votre URL Render
 let stream = null;
 let videoElement = null;
 
