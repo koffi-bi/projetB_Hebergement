@@ -1,4 +1,5 @@
 <?php
+
 require_once '../config/config.php';
 require_once '../config/admin_auth.php';
 require_once '../config/env_loader.php';          // Charge le fichier .env
@@ -31,8 +32,6 @@ $historique = $stmtHist->fetchAll();
 $flash = $_SESSION['flash_admin'] ?? null;
 unset($_SESSION['flash_admin']);
 
-// Onglet actif — défini ICI avant tout traitement POST 
-
 $onglet = $_GET['onglet'] ?? 'recherche';
 if (!in_array($onglet, ['recherche','candidats','historique','parametres'])) $onglet = 'recherche';
 
@@ -48,7 +47,7 @@ $stmtC = $pdo->prepare("
 $stmtC->execute();
 $candidats_liste = $stmtC->fetchAll();
 
-// ─ Envoi email via PHPMailer + SMTP Gmail 
+// ── Envoi email via PHPMailer + SMTP Gmail ──────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoyer_email') {
 
   $dest     = filter_input(INPUT_POST, 'email_dest', FILTER_SANITIZE_EMAIL);
@@ -88,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Admin — CvMatchIA</title>
+  <title>Dashboard CvMatchIA</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="dashboard.css">
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -100,7 +99,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
 
 <div class="layout">
 
-  <!-- SIDEBAR-->
+  <!-- ====================================================
+       SIDEBAR
+  ==================================================== -->
   <aside class="sidebar">
 
     <div class="sb-logo">
@@ -179,13 +180,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
   </aside>
 
 
-  <!--  MAIN -->
+  <!-- ====================================================
+       MAIN
+  ==================================================== -->
   <main class="main">
 
     <div class="topbar">
+      <!-- Hamburger — s'affiche uniquement sur mobile (< 900px) -->
+      <button class="btn-hamburger" id="btn-hamburger"
+              onclick="toggleSidebar()" aria-label="Ouvrir le menu">
+        <i data-lucide="menu" style="width:18px;height:18px;"></i>
+      </button>
       <div class="topbar-titre">
         Dashboard Administrateur
-        <span class="topbar-badge">CvMatchIA</span>
+        <span class="topbar-badge">CvMatchIA ·</span>
       </div>
       <div class="topbar-right">
         <span class="topbar-date" id="topbar-date"></span>
@@ -224,13 +232,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
         </div>
         <div class="stat-card">
           <div class="stat-ico violet"><i data-lucide="zap" style="width:22px;height:22px;"></i></div>
-          <div><div class="stat-val">IA</div><div class="stat-label">Moteur actif</div></div>
+          <div><div class="stat-val">-</div><div class="stat-label">Moteur IA actif</div></div>
         </div>
       </div>
 
 
       <?php if ($onglet === 'recherche'): ?>
-      <!-- RECHERCHE IA -->
+      <!-- ════════════════ RECHERCHE IA ════════════════ -->
 
       <div class="recherche-layout" id="recherche-layout">
 
@@ -240,7 +248,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
           <div class="panneau-titre">
             <i data-lucide="search" style="width:18px;height:18px;color:var(--bleu-vif);"></i>
             Recherche intelligente
-            <span class="groq-badge"></span>
+            <span class="groq-badge">-</span>
           </div>
           <p class="panneau-desc">
             Décrivez le profil en langage naturel ou posez une question —
@@ -249,7 +257,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
 
           <div class="recherche-zone">
             <textarea id="requete-input" class="recherche-input"
-              placeholder="Ex : Je cherche une femme informaticienne avec 2 ans d'expérience à Abidjan…&#10;Ou : Combien de candidats avons-nous ?&#10;"
+              placeholder="Ex : Je cherche une femme informaticienne avec 2 ans d'expérience à Abidjan…&#10;Ou : Combien de candidats avons-nous ?&#10;Ou : Bonjour !"
               maxlength="500"></textarea>
             <div class="recherche-toolbar">
               <div style="display:flex;align-items:center;gap:9px;">
@@ -263,7 +271,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
           </div>
 
           <div class="suggestions">
-            <span class="suggestion-chip" onclick="remplirSuggestion(this)">Femme informaticienne · 1 an · Abidjan</span>
+            <span class="suggestion-chip" onclick="remplirSuggestion(this)">Femme  · 1 an · Abidjan</span>
             <span class="suggestion-chip" onclick="remplirSuggestion(this)">Data scientist · Python · 3+ ans</span>
             <span class="suggestion-chip" onclick="remplirSuggestion(this)">Dev Full Stack · disponible immédiatement</span>
             <span class="suggestion-chip" onclick="remplirSuggestion(this)">Combien de candidats ?</span>
@@ -314,8 +322,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
           <div class="resultats-header" id="resultats-header" style="display:none;">
             <div>
               <div class="resultats-nb" id="resultats-nb">0 résultats</div>
-              <div style="font-size:0.73rem;color:var(--gris-texte);margin-top:3px;" id="resultats-requete-label"></div>
-              <code class="sql-tag" id="sql-tag" style="display:none;"></code>
+              <div style="font-size:0.73rem;color:var(--gris-texte);margin-top:3px;" id="resultats-requete-label"></div>              <!-- sql-tag retiré : la requête SQL est masquée côté client -->
             </div>
             <div class="resultats-tri">
               <button class="tri-btn actif" onclick="trierResultats('score',this)">Score</button>
@@ -347,7 +354,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
 
 
       <?php elseif ($onglet === 'candidats'): ?>
-      <!--  TOUS LES CANDIDATS  -->
+      <!-- ════════════════ TOUS LES CANDIDATS ════════════════ -->
 
       <div class="table-wrap">
         <div class="table-header-row">
@@ -418,7 +425,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
 
 
       <?php elseif ($onglet === 'historique'): ?>
-      <!-- HISTORIQUE  -->
+      <!-- ════════════════ HISTORIQUE ════════════════ -->
 
       <div class="table-wrap">
         <div class="table-header-row">
@@ -447,7 +454,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
 
 
       <?php elseif ($onglet === 'parametres'): ?>
-      <!-- PARAMÈTRES  -->
+      <!-- ════════════════ PARAMÈTRES ════════════════ -->
 
       <div style="background:var(--blanc);border-radius:16px;padding:28px;box-shadow:var(--ombre);">
         <h3 style="font-family:var(--font-titre);font-size:1rem;font-weight:700;color:var(--bleu-fonce);margin-bottom:18px;display:flex;align-items:center;gap:8px;">
@@ -457,7 +464,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
           Compte : <strong style="color:var(--bleu-fonce)"><?= htmlspecialchars($admin['email']??'') ?></strong>
         </p>
         <p style="font-size:0.86rem;color:var(--gris-texte);margin-bottom:8px;">
-          Moteur IA : <strong style="color:var(--bleu-fonce)"> —</strong>
+          Moteur IA : <strong style="color:var(--bleu-fonce)">—</strong>
         </p>
         <p style="font-size:0.86rem;color:var(--gris-texte);margin-bottom:8px;">
           API Python : <code style="background:var(--gris-fond);padding:2px 8px;border-radius:5px;font-size:0.82rem;"><?= API_GROQ_URL ?></code>
@@ -473,10 +480,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
 
     </div><!-- page-body -->
   </main>
+<!-- Overlay — cliquer dessus ferme la sidebar sur mobile -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
 </div><!-- layout -->
 
 
-<!-- MODAL EMAIL-->
+<!-- ====================================================
+     MODAL EMAIL
+==================================================== -->
 <div class="modal-overlay" id="modal-email">
   <div class="modal">
     <div class="modal-titre">
@@ -517,7 +529,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
 </div>
 
 
-<!--  JAVASCRIPt -->
+<!-- ====================================================
+     JAVASCRIPT
+==================================================== -->
 <script>
 // Initialiser les icônes Lucide
 lucide.createIcons();
@@ -526,16 +540,18 @@ const API_URL = '<?= API_GROQ_URL ?>';
 let resultatsActuels  = [];
 let candidatSelectionne = null;
 
-//  Date topbar
+// ── Date topbar ───────────────────────────────────────────
 document.getElementById('topbar-date').textContent =
   new Date().toLocaleDateString('fr-FR', {day:'numeric',month:'long',year:'numeric'});
 
-// Compteur textarea 
+// ── Compteur textarea ─────────────────────────────────────
 document.getElementById('requete-input')?.addEventListener('input', function() {
   document.getElementById('nb-chars').textContent = this.value.length + ' / 500';
 });
 
+// ================================================================
 //  LANCER L'ANALYSE
+// ================================================================
 async function lancerAnalyse() {
   const requete = document.getElementById('requete-input').value.trim();
   if (!requete) { alert('Veuillez saisir une requête.'); return; }
@@ -590,10 +606,10 @@ async function lancerAnalyse() {
   }
 
   btn.disabled = false;
-  document.getElementById('analyser-texte').textContent = 'Analyser';
+  document.getElementById('analyser-texte').textContent = 'Analyser avec Groq';
 }
 
-//  Afficher réponse conversation / statistique 
+// ── Afficher réponse conversation / statistique ───────────
 function afficherReponseTexte(texte, type) {
   const header    = document.getElementById('resultats-header');
   const conteneur = document.getElementById('resultats-conteneur');
@@ -616,7 +632,7 @@ function afficherReponseTexte(texte, type) {
   lucide.createIcons(); // re-initialiser les icônes injectées
 }
 
-//  Afficher les cartes résultats 
+// ── Afficher les cartes résultats ─────────────────────────
 function afficherResultats(resultats, sql, requete) {
   const header    = document.getElementById('resultats-header');
   const conteneur = document.getElementById('resultats-conteneur');
@@ -629,9 +645,7 @@ function afficherResultats(resultats, sql, requete) {
   document.getElementById('resultats-nb').innerHTML = `<span>${nb}</span> profil${nb>1?'s':''} trouvé${nb>1?'s':''}`;
   document.getElementById('resultats-requete-label').textContent = `"${(requete||'').substring(0,70)}${requete&&requete.length>70?'…':''}"`;
 
-  const sqlTag = document.getElementById('sql-tag');
-  if (sql) { sqlTag.textContent = sql; sqlTag.style.display = 'block'; }
-  else       { sqlTag.style.display = 'none'; }
+  // Requête SQL masquée — ne jamais l'afficher à l'utilisateur final
 
   if (nb === 0) {
     etatVide.style.display = 'block';
@@ -644,7 +658,7 @@ function afficherResultats(resultats, sql, requete) {
   lucide.createIcons();
 }
 
-// Construire le HTML d'une carte candidat 
+// ── Construire le HTML d'une carte candidat ───────────────
 function construireCarte(c, idx) {
   const rang      = idx + 1;
   const barClass  = rang===1 ? 'or' : rang===2 ? 'argent' : rang===3 ? 'bronze' : '';
@@ -731,7 +745,7 @@ function construireCarte(c, idx) {
   </div>`;
 }
 
-// Téléchargement du CV 
+// ── Téléchargement du CV ──────────────────────────────────
 function telechargerCV(chemin, nom) {
   const a = document.createElement('a');
   a.href     = `../${chemin}`;
@@ -739,7 +753,7 @@ function telechargerCV(chemin, nom) {
   a.click();
 }
 
-//  Tri des résultats 
+// ── Tri des résultats ─────────────────────────────────────
 function trierResultats(critere, btn) {
   document.querySelectorAll('.tri-btn').forEach(b => b.classList.remove('actif'));
   btn.classList.add('actif');
@@ -751,7 +765,9 @@ function trierResultats(critere, btn) {
   lucide.createIcons();
 }
 
+// ================================================================
 //  AGENT CONVERSATIONNEL
+// ================================================================
 async function envoyerAgent() {
   const input    = document.getElementById('agent-input');
   const question = input.value.trim();
@@ -804,8 +820,9 @@ function obtenirHistoriqueChat() {
   return messages.slice(-6);
 }
 
-
+// ================================================================
 //  SÉLECTION CANDIDAT (sidebar)
+// ================================================================
 function selectionnerCandidat(id, nom, email, tel, ville) {
   // Désélectionner l'ancien
   if (candidatSelectionne) {
@@ -841,8 +858,9 @@ function ouvrirModalSidebar() {
   ouvrirModal(email, nom);
 }
 
-
+// ================================================================
 //  MODAL EMAIL
+// ================================================================
 function ouvrirModal(email, nom) {
   document.getElementById('modal-dest-nom').textContent   = nom;
   document.getElementById('modal-dest-email').textContent = email;
@@ -861,7 +879,9 @@ document.getElementById('modal-email').addEventListener('click', function(e) {
   if (e.target === this) fermerModal();
 });
 
+// ================================================================
 //  RECONNAISSANCE VOCALE
+// ================================================================
 let vocaleActive = false;
 
 function toggleVocal() {
@@ -890,7 +910,9 @@ function toggleVocal() {
   rec.start();
 }
 
+// ================================================================
 //  SUGGESTIONS + HISTORIQUE
+// ================================================================
 function remplirSuggestion(el) {
   document.getElementById('requete-input').value = el.textContent.trim();
   document.getElementById('nb-chars').textContent = el.textContent.trim().length + ' / 500';
@@ -902,13 +924,56 @@ function chargerHistorique(el) {
   lancerAnalyse();
 }
 
-//  Utilitaire anti-XSS 
+// ── Utilitaire anti-XSS ──────────────────────────────────
 function escHtml(str) {
   if (!str) return '';
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+</script>
+
+<script>
+// ================================================================
+//  HAMBURGER MENU — sidebar responsive sur mobile
+// ================================================================
+
+const sidebarEl  = document.querySelector('.sidebar');
+const overlayEl  = document.getElementById('sidebar-overlay');
+const hamburgerEl = document.getElementById('btn-hamburger');
+
+/**
+ * Ouvre ou ferme la sidebar sur mobile.
+ * Sur desktop (> 900px) ce bouton est caché — la fonction n'est jamais appelée.
+ */
+function toggleSidebar() {
+  const estOuverte = sidebarEl.classList.toggle('ouverte');
+  overlayEl.classList.toggle('visible', estOuverte);
+
+  // Icône : menu (3 lignes) ↔ croix
+  hamburgerEl.innerHTML = estOuverte
+    ? '<i data-lucide="x" style="width:18px;height:18px;"></i>'
+    : '<i data-lucide="menu" style="width:18px;height:18px;"></i>';
+  lucide.createIcons();
+}
+
+// Fermer la sidebar quand on clique sur un lien de navigation
+document.querySelectorAll('.sb-item').forEach(lien => {
+  lien.addEventListener('click', () => {
+    if (window.innerWidth <= 900) {
+      sidebarEl.classList.remove('ouverte');
+      overlayEl.classList.remove('visible');
+    }
+  });
+});
+
+// Fermer automatiquement au retour en mode desktop
+window.addEventListener('resize', () => {
+  if (window.innerWidth > 900) {
+    sidebarEl.classList.remove('ouverte');
+    overlayEl.classList.remove('visible');
+  }
+});
 </script>
 
 </body>
