@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&display=swap');
+   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&display=swap');
     :root {
       --bleu-fonce:  #0A1628;
       --bleu-moyen:  #1B3A6B;
@@ -26,7 +26,9 @@
     /* ── LAYOUT ── */
     .layout { display: flex; min-height: 100vh; }
 
-    /*  SIDEBAR */
+    /* ======================================================
+       SIDEBAR
+    ====================================================== */
     .sidebar {
       width: 260px; min-width: 260px;
       background: var(--bleu-fonce);
@@ -71,7 +73,9 @@
     .btn-deconnexion { display: flex; align-items: center; gap: 10px; padding: 10px 12px; width: 100%; background: rgba(229,62,62,0.1); border: 1px solid rgba(229,62,62,0.2); border-radius: 10px; color: #FC8181; font-size: 0.83rem; text-decoration: none; transition: background 0.2s; font-family: var(--font-corps); cursor: pointer; }
     .btn-deconnexion:hover { background: rgba(229,62,62,0.2); }
 
-    /*  MAIN CONTENT*/
+    /* ======================================================
+       MAIN CONTENT
+    ====================================================== */
     .main { margin-left: 260px; flex: 1; display: flex; flex-direction: column; }
 
     .topbar { background: var(--blanc); padding: 0 32px; height: 60px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--gris-bord); position: sticky; top: 0; z-index: 50; box-shadow: 0 1px 8px rgba(0,0,0,0.04); }
@@ -100,7 +104,9 @@
     .stat-val   { font-family: var(--font-titre); font-size: 1.6rem; font-weight: 700; color: var(--bleu-fonce); line-height: 1; }
     .stat-label { font-size: 0.76rem; color: var(--gris-texte); margin-top: 3px; }
 
-    /* ZONE RECHERCHE */
+    /* ======================================================
+       ZONE RECHERCHE
+    ====================================================== */
     .recherche-layout { display: grid; grid-template-columns: 1fr 1.2fr; gap: 20px; align-items: start; }
 
     .panneau-recherche { background: var(--blanc); border-radius: 18px; padding: 26px; box-shadow: var(--ombre); border: 1px solid rgba(0,0,0,0.04); position: sticky; top: 80px; }
@@ -157,7 +163,9 @@
     .hist-item-texte { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .hist-date { font-size: 0.66rem; color: var(--gris-texte); flex-shrink: 0; }
 
-    /* PANNEAU RÉSULTATS*/
+    /* ======================================================
+       PANNEAU RÉSULTATS
+    ====================================================== */
     .panneau-resultats { display: flex; flex-direction: column; gap: 14px; }
 
     .resultats-header { background: var(--blanc); border-radius: 14px; padding: 16px 20px; box-shadow: var(--ombre); border: 1px solid rgba(0,0,0,0.04); display: flex; align-items: center; justify-content: space-between; }
@@ -167,7 +175,7 @@
     .tri-btn { padding: 5px 12px; border: 1px solid var(--gris-bord); border-radius: 7px; font-size: 0.73rem; color: #6B7A8E; cursor: pointer; background: var(--blanc); transition: all 0.2s; font-family: var(--font-corps); }
     .tri-btn.actif { background: var(--bleu-vif); color: var(--blanc); border-color: var(--bleu-vif); }
 
-    .sql-tag { font-family: monospace; font-size: 0.68rem; color: #6B7A8E; background: var(--gris-fond); padding: 4px 8px; border-radius: 6px; margin-top: 6px; overflow-x: auto; white-space: nowrap; max-width: 100%; display: block; border: 1px solid var(--gris-bord); }
+    /* .sql-tag supprimé — requête SQL masquée */
 
     /* État vide */
     .etat-vide { background: var(--blanc); border-radius: 18px; padding: 56px 28px; text-align: center; box-shadow: var(--ombre); border: 2px dashed var(--gris-bord); }
@@ -181,7 +189,9 @@
     .skel-line { height: 11px; border-radius: 5px; background: linear-gradient(90deg,#F0F4F8 25%,#E2E8F0 50%,#F0F4F8 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; margin-bottom: 9px; }
     @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 
-    /* CARTE CANDIDAT RÉSULTAT (améliorée)*/
+    /* ======================================================
+       CARTE CANDIDAT RÉSULTAT (améliorée)
+    ====================================================== */
     .candidat-card {
       background: var(--blanc);
       border-radius: 16px;
@@ -288,7 +298,9 @@
     .alerte-stat-bg { border-color: var(--bleu-clair); border-left-color: var(--vert); }
     .alerte-stat-bg .alerte-conv-ico { color: var(--vert); }
 
-    /* TABLE CANDIDATS*/
+    /* ======================================================
+       TABLE CANDIDATS
+    ====================================================== */
     .table-wrap { background: var(--blanc); border-radius: 16px; box-shadow: var(--ombre); border: 1px solid rgba(0,0,0,0.04); overflow: hidden; }
     .table-header-row { padding: 16px 22px; border-bottom: 1px solid var(--gris-bord); display: flex; align-items: center; justify-content: space-between; }
     .table-header-row h3 { font-family: var(--font-titre); font-size: 0.95rem; font-weight: 700; color: var(--bleu-fonce); display: flex; align-items: center; gap: 8px; }
@@ -310,7 +322,9 @@
     .btn-td-dl    { background: var(--gris-fond); color: #4A5A72; border: 1px solid var(--gris-bord); margin-left: 4px; }
     .btn-td-dl:hover { background: var(--bleu-clair); color: var(--bleu-moyen); }
 
-    /*  MODAL EMAIL*/
+    /* ======================================================
+       MODAL EMAIL
+    ====================================================== */
     .modal-overlay { position: fixed; inset: 0; background: rgba(10,22,40,0.7); z-index: 300; display: none; align-items: center; justify-content: center; padding: 20px; }
     .modal-overlay.visible { display: flex; animation: fadeModal 0.2s ease; }
     @keyframes fadeModal { from{opacity:0} to{opacity:1} }
@@ -329,7 +343,54 @@
     .btn-envoyer { padding: 10px 24px; border-radius: 9px; background: var(--bleu-vif); color: var(--blanc); border: none; cursor: pointer; font-family: var(--font-titre); font-size: 0.86rem; font-weight: 600; }
     .btn-envoyer:hover { background: #1558c0; }
 
-    /* RESPONSIVE*/
-    @media (max-width: 1100px) { .recherche-layout { grid-template-columns: 1fr; } .panneau-recherche { position: static; } }
-    @media (max-width: 900px)  { .sidebar { display: none; } .main { margin-left: 0; } }
-    @media (max-width: 600px)  { .page-body { padding: 14px; } .stats-row { grid-template-columns: 1fr 1fr; } }
+    /* ======================================================
+       HAMBURGER — visible uniquement sur mobile
+    ====================================================== */
+    .btn-hamburger {
+      display: none;
+      width: 36px; height: 36px;
+      background: var(--blanc);
+      border: 1px solid var(--gris-bord);
+      border-radius: 8px;
+      align-items: center; justify-content: center;
+      cursor: pointer; color: var(--bleu-fonce);
+      flex-shrink: 0;
+    }
+
+    /* Overlay sombre derrière la sidebar ouverte sur mobile */
+    .sidebar-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(10,22,40,0.65);
+      z-index: 99;
+      backdrop-filter: blur(2px);
+    }
+    .sidebar-overlay.visible { display: block; }
+
+    /* Sidebar fermée = hors écran à gauche */
+    .sidebar.ouverte { transform: translateX(0) !important; }
+
+    /* ======================================================
+       RESPONSIVE
+    ====================================================== */
+    @media (max-width: 1100px) {
+      .recherche-layout { grid-template-columns: 1fr; }
+      .panneau-recherche { position: static; }
+    }
+    @media (max-width: 900px) {
+      /* Sidebar masquée hors écran par défaut */
+      .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+      }
+      /* Main prend toute la largeur */
+      .main { margin-left: 0; width: 100%; }
+      /* Bouton hamburger visible */
+      .btn-hamburger { display: flex; }
+    }
+    @media (max-width: 600px) {
+      .page-body { padding: 14px 16px; }
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .topbar { padding: 0 14px; }
+      .topbar-date { display: none; }
+    }
