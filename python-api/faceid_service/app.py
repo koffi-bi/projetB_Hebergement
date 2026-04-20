@@ -1,280 +1,224 @@
 # ================================================================
-#  SmartRecruit — Face ID Service
+#  cvmatchIA — Face ID Service (Google Cloud Vision)
 #  Fichier : python/face_id_service.py
-#
-#  Lancer (dev)  : uvicorn face_id_service:app --port 5000 --reload
-#  Lancer (prod) : uvicorn face_id_service:app --host 0.0.0.0 --port 5000 --workers 2
-#
-#  IA utilisée : Groq (GRATUIT) — https://console.groq.com
-#    - Texte  : llama-3.3-70b-versatile   (~500 000 tokens/jour gratuits)
-#    - Vision : meta-llama/llama-4-scout-17b-16e-instruct (multimodal)
-#    - URL    : https://api.groq.com/openai/v1
-#
-#  .env requis (même dossier) :
-#      GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxx    ← obtenir sur console.groq.com
-#      DB_HOST=localhost
-#      DB_NAME=smartrecruit
-#      DB_USER=root
-#      DB_PASSWORD=
 # ================================================================
 
-import cv2
-import face_recognition
+import os
+import json
 import numpy as np
 import mysql.connector
-import json, secrets, string, base64, logging
+import secrets
+import string
+import logging
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from groq import Groq
 from dotenv import load_dotenv
-import os
+from google.cloud import vision
+import base64
 
 load_dotenv()
 
-# ── CONFIG (modifiez ici) ────────────────────────────────────────
-GROQ_API_KEY        = os.getenv("GROQ_API_KEY")   # Clé Groq — console.groq.com
-SEUIL_TOLERANCE     = 0.50   # 0.4 strict → 0.6 souple
+# ── CONFIGURATION ────────────────────────────────────────────────
+SEUIL_DISTANCE = 0.45      # Seuil de similarité (plus petit = plus strict)
 DUREE_TOKEN_MINUTES = 5
-DB = dict(host=os.getenv("DB_HOST","localhost"), database=os.getenv("DB_NAME","projetb"),
-          user=os.getenv("DB_USER","root"), password=os.getenv("DB_PASSWORD",""), charset="utf8mb4")
 
-# ── MODÈLES GROQ ─────────────────────────────────────────────────
-# Texte  : LLaMA 3.3 70B — meilleure qualité sur le tier gratuit
-# Vision : LLaMA 4 Scout — seul modèle vision disponible gratuitement sur Groq
-MODELE_TEXTE  = "llama-3.3-70b-versatile"
-MODELE_VISION = "meta-llama/llama-4-scout-17b-16e-instruct"
+DB_CONFIG = {
+    "host": os.getenv("DB_HOST"),
+    "port": int(os.getenv("DB_PORT")),
+    "database": os.getenv("DB_NAME"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+}
 
-# ── INIT ─────────────────────────────────────────────────────────
-# Groq est compatible avec le SDK OpenAI mais utilise son propre SDK
-# URL de base : https://api.groq.com/openai/v1
-groq_client = Groq(api_key=GROQ_API_KEY)
+# Initialisation du client Google Cloud Vision
+# Il lira la clé depuis GOOGLE_APPLICATION_CREDENTIALS (fichier JSON téléchargé)
+client = vision.ImageAnnotatorClient()
 
-app = FastAPI(title="SmartRecruit — Face ID", version="2.0", docs_url="/docs")
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost","http://127.0.0.1"],
-                   allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app = FastAPI(title="SmartRecruit — Face ID (Google Vision)", version="3.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("face_id")
 
 # ── MODÈLES PYDANTIC ─────────────────────────────────────────────
-class RequeteCapturer(BaseModel):
-    action: str = "capturer"
+class RequeteEnregistrement(BaseModel):
+    photo_base64: str   # Image encodée en base64 (data:image/jpeg;base64,...)
+    admin_id: int
 
-class RequeteVerifier(BaseModel):
-    action: str = "identifier"
+class RequeteVerification(BaseModel):
+    photo_base64: str
+    admin_id: int
 
 # ── UTILITAIRES ──────────────────────────────────────────────────
-
 def get_db():
-    """Connexion MySQL."""
-    return mysql.connector.connect(**DB)
+    return mysql.connector.connect(**DB_CONFIG)
 
 def token_securise(n=64):
-    """Token URL-safe aléatoire."""
     return "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(n))
 
-def frame_b64(frame):
-    """Frame OpenCV → JPEG base64."""
-    _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-    return base64.b64encode(buf).decode()
-
-def capturer_visage():
+def extraire_landmarks(photo_base64: str):
     """
-    Ouvre la webcam et attend qu'un visage soit détecté (~7 sec max).
-    Retourne (frame, encoding_128_floats).
-    Lève HTTPException 400 si rien n'est détecté.
+    Envoie l'image à Google Cloud Vision, récupère les landmarks du premier visage.
+    Retourne un dictionnaire avec les coordonnées normalisées (x, y) pour chaque point.
+    Lève une exception si aucun visage n'est détecté.
     """
-    cap = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    # Nettoyer le base64 (enlever le préfixe "data:image/jpeg;base64,")
+    if ',' in photo_base64:
+        photo_base64 = photo_base64.split(',')[1]
+    image_bytes = base64.b64decode(photo_base64)
 
-    if not cap.isOpened():
-        raise HTTPException(400, "Webcam inaccessible. Vérifiez qu'elle est branchée.")
+    image = vision.Image(content=image_bytes)
+    response = client.face_detection(image=image)
+    faces = response.face_annotations
 
-    frame_ok = encoding = None
+    if not faces:
+        raise ValueError("Aucun visage détecté sur l'image.")
 
-    for _ in range(90):   # ~7 secondes à ~12 fps
-        ok, frame = cap.read()
-        if not ok:
-            continue
-        rgb  = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        locs = face_recognition.face_locations(rgb, model="hog")
-        encs = face_recognition.face_encodings(rgb, locs)
-        if encs:
-            encoding = encs[0]
-            frame_ok = frame.copy()
-            log.info("Visage détecté.")
-            break
+    # Prendre le premier visage
+    face = faces[0]
+    landmarks = {}
+    # Les landmarks disponibles sont : LEFT_EYE, RIGHT_EYE, LEFT_OF_LEFT_EYEBROW, etc.
+    # Voir https://cloud.google.com/vision/docs/reference/rest/v1/Position
+    for landmark in face.landmarks:
+        # type : enum (ex: 'LEFT_EYE')
+        landmarks[landmark.type_.name] = {
+            "x": landmark.position.x,
+            "y": landmark.position.y,
+            "z": landmark.position.z
+        }
+    return landmarks
 
-    cap.release()
-    # destroyAllWindows() indisponible sur opencv-python headless (Windows sans GUI).
-    # Le try/except garantit que le service tourne dans tous les environnements.
-    try:
-        cv2.destroyAllWindows()
-    except Exception:
-        pass
-
-    if encoding is None:
-        raise HTTPException(400, "Aucun visage détecté après 7 secondes. "
-                                 "Placez-vous face à la caméra dans un endroit bien éclairé.")
-    return frame_ok, encoding
-
-# ── GROQ IA ──────────────────────────────────────────────────────
-
-def groq_qualite_capture(frame_b64_str: str, contexte: str) -> str:
+def comparer_landmarks(landmarks1, landmarks2):
     """
-    Groq Vision (LLaMA 4 Scout) analyse la photo capturée et évalue
-    la qualité (luminosité, netteté, centrage) en 1-2 phrases.
-    Modèle : meta-llama/llama-4-scout-17b-16e-instruct (gratuit)
+    Compare deux ensembles de landmarks (dictionnaires) en calculant la distance
+    euclidienne moyenne entre les points correspondants.
+    Retourne la distance moyenne.
     """
-    resp = groq_client.chat.completions.create(
-        model=MODELE_VISION,
-        messages=[{"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{frame_b64_str}"}},
-            {"type": "text",      "text": (
-                f"Contexte : {contexte}. "
-                "Dis en 1-2 phrases si ce visage est bien visible, bien éclairé "
-                "et utilisable pour une authentification biométrique fiable. "
-                "Réponds en français, sois direct."
-            )},
-        ]}],
-        max_tokens=100, temperature=0.2,
-    )
-    return resp.choices[0].message.content.strip()
-
-def groq_log_connexion(admin_nom: str, distance: float) -> str:
-    """
-    Groq (LLaMA 3.3 70B) génère un commentaire de sécurité après
-    une connexion Face ID réussie. Enrichit les journaux d'audit.
-    Modèle : llama-3.3-70b-versatile (gratuit, ~500k tokens/jour)
-    """
-    confiance = round((1 - distance) * 100, 1)
-    resp = groq_client.chat.completions.create(
-        model=MODELE_TEXTE,
-        messages=[{"role": "user", "content": (
-            f"L'admin '{admin_nom}' s'est connecté via Face ID. "
-            f"Confiance biométrique : {confiance}% (distance : {distance:.3f}). "
-            "En une phrase courte en français, dis si cette connexion semble normale."
-        )}],
-        max_tokens=60, temperature=0.1,
-    )
-    return resp.choices[0].message.content.strip()
+    points_communs = set(landmarks1.keys()) & set(landmarks2.keys())
+    if not points_communs:
+        return float('inf')
+    distances = []
+    for point in points_communs:
+        p1 = np.array([landmarks1[point]['x'], landmarks1[point]['y'], landmarks1[point]['z']])
+        p2 = np.array([landmarks2[point]['x'], landmarks2[point]['y'], landmarks2[point]['z']])
+        distances.append(np.linalg.norm(p1 - p2))
+    return np.mean(distances)
 
 # ── ENDPOINTS ────────────────────────────────────────────────────
 
-@app.post("/enregistrer-visage",
-          summary="Capturer et encoder le visage d'un nouvel admin",
-          tags=["Face ID"])
-async def enregistrer_visage(body: RequeteCapturer):
+@app.post("/enregistrer-visage")
+async def enregistrer_visage(req: RequeteEnregistrement):
     """
-    Appelé par admin/register.php lors de l'inscription.
-    Capture la webcam → génère l'encoding 128 floats.
-    PHP récupère cet encoding et le stocke dans MySQL (colonne face_encoding).
-
-    Retourne :
-    - encoding  : liste de 128 floats à stocker en base
-    - avis_groq : évaluation qualité par Groq Vision
+    Reçoit la photo de l'admin, extrait les landmarks via Google Vision,
+    et les stocke dans la base (colonne face_landmarks).
     """
-    log.info("POST /enregistrer-visage")
-    frame, encoding = capturer_visage()
-    avis = groq_qualite_capture(frame_b64(frame), "enregistrement Face ID admin")
-    return {"success": True, "encoding": encoding.tolist(), "avis_groq": avis,
-            "message": "Visage enregistré avec succès."}
-
-
-@app.post("/verifier-visage",
-          summary="Identifier un admin par Face ID et générer un token",
-          tags=["Face ID"])
-async def verifier_visage(body: RequeteVerifier):
-    """
-    Appelé par admin/login.php lors de la connexion.
-
-    Flux :
-    1. Webcam capture le visage en direct
-    2. Comparaison avec les encodings MySQL (admins avec face_id_actif=1)
-    3. Si reconnu → token inséré dans sessions_face_id (expire dans 5 min)
-    4. PHP valide ce token côté serveur pour ouvrir la session PHP
-    5. Groq commente la connexion pour les logs
-
-    Retourne :
-    - token      : token que PHP doit valider en base
-    - admin_nom  : nom de l'admin reconnu
-    - commentaire: note de sécurité Groq
-    """
-    log.info("POST /verifier-visage")
-
-    # Capturer
-    frame, encoding_inconnu = capturer_visage()
-
-    # Charger les admins depuis MySQL
-    db     = get_db()
-    cur    = db.cursor(dictionary=True)
-    cur.execute("""
-        SELECT id, prenom, nom, face_encoding
-        FROM administrateurs
-        WHERE face_id_actif=1 AND face_encoding IS NOT NULL AND statut='actif'
-    """)
-    admins = cur.fetchall()
-
-    if not admins:
-        cur.close(); db.close()
-        raise HTTPException(404, "Aucun admin avec Face ID configuré.")
-
-    # Trouver le meilleur match
-    meilleur = None
-    dist_min = float("inf")
-
-    for admin in admins:
-        enc_ref  = np.array(json.loads(admin["face_encoding"]))
-        distance = face_recognition.face_distance([enc_ref], encoding_inconnu)[0]
-        log.info(f"  {admin['prenom']} {admin['nom']} → {distance:.4f}")
-        if distance < SEUIL_TOLERANCE and distance < dist_min:
-            dist_min = distance
-            meilleur = admin
-
-    # Aucun match
-    if meilleur is None:
-        cur.close(); db.close()
-        return {"success": False, "token": None,
-                "message": f"Visage non reconnu (distance min : {dist_min:.3f}). "
-                           "Utilisez votre mot de passe si le problème persiste."}
-
-    # Générer et stocker le token
-    token = token_securise()
-    expir = datetime.now() + timedelta(minutes=DUREE_TOKEN_MINUTES)
-    cur.execute("INSERT INTO sessions_face_id (admin_id, token, expire_a) VALUES (%s,%s,%s)",
-                (meilleur["id"], token, expir))
-    cur.execute("UPDATE administrateurs SET derniere_connexion=NOW() WHERE id=%s", (meilleur["id"],))
-    db.commit(); cur.close(); db.close()
-
-    nom        = f"{meilleur['prenom']} {meilleur['nom']}"
-    commentaire = groq_log_connexion(nom, dist_min)
-    log.info(f"Face ID OK — {nom} — distance {dist_min:.4f}")
-
-    return {"success": True, "token": token, "admin_nom": nom,
-            "commentaire": commentaire, "message": f"Bienvenue {meilleur['prenom']} !"}
-
-
-@app.get("/sante", summary="Healthcheck", tags=["Système"])
-async def sante():
-    """Vérifie que le service, MySQL et Groq sont opérationnels."""
+    log.info(f"Enregistrement Face ID pour admin #{req.admin_id}")
     try:
-        db = get_db(); db.close(); bd_ok = True
+        landmarks = extraire_landmarks(req.photo_base64)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("""
+        UPDATE administrateurs
+        SET face_landmarks = %s, face_id_actif = 1
+        WHERE id = %s
+    """, (json.dumps(landmarks), req.admin_id))
+    db.commit()
+    cursor.close()
+    db.close()
+
+    return {"success": True, "message": "Visage enregistré avec succès."}
+
+
+@app.post("/verifier-visage")
+async def verifier_visage(req: RequeteVerification):
+    """
+    Reçoit la photo de l'admin, extrait les landmarks, compare avec ceux stockés
+    en base, génère un token si la distance est inférieure au seuil.
+    """
+    log.info(f"Vérification Face ID pour admin #{req.admin_id}")
+
+    # Récupérer les landmarks stockés
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT id, prenom, nom, face_landmarks
+        FROM administrateurs
+        WHERE id = %s AND face_id_actif = 1
+    """, (req.admin_id,))
+    admin = cursor.fetchone()
+    cursor.close()
+    db.close()
+
+    if not admin or not admin.get('face_landmarks'):
+        raise HTTPException(status_code=404, detail="Aucun visage enregistré pour cet administrateur.")
+
+    stored_landmarks = json.loads(admin['face_landmarks'])
+
+    try:
+        new_landmarks = extraire_landmarks(req.photo_base64)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Comparaison
+    distance = comparer_landmarks(stored_landmarks, new_landmarks)
+    log.info(f"Distance entre les visages : {distance:.4f} (seuil : {SEUIL_DISTANCE})")
+
+    if distance > SEUIL_DISTANCE:
+        return {"success": False, "message": f"Visage non reconnu (distance {distance:.3f})"}
+
+    # Génération du token de session (pour être utilisé par PHP)
+    token = token_securise()
+    expire = datetime.now() + timedelta(minutes=DUREE_TOKEN_MINUTES)
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO sessions_face_id (admin_id, token, expire_a)
+        VALUES (%s, %s, %s)
+    """, (admin['id'], token, expire))
+    cursor.execute("UPDATE administrateurs SET derniere_connexion = NOW() WHERE id = %s", (admin['id'],))
+    db.commit()
+    cursor.close()
+    db.close()
+
+    nom_complet = f"{admin['prenom']} {admin['nom']}"
+    log.info(f"✅ Connexion Face ID réussie pour {nom_complet} (distance {distance:.4f})")
+
+    return {
+        "success": True,
+        "token": token,
+        "admin_nom": nom_complet,
+        "message": f"Bienvenue {admin['prenom']} !"
+    }
+
+
+@app.get("/sante")
+async def sante():
+    """Healthcheck."""
+    try:
+        db = get_db()
+        db.close()
+        bd_ok = True
     except Exception:
         bd_ok = False
-    return {"status": "ok" if bd_ok else "erreur_bd",
-            "service": "Face ID — FastAPI + Groq (gratuit)", "version": "2.0",
-            "modele_texte": MODELE_TEXTE, "modele_vision": MODELE_VISION,
-            "bd": bd_ok, "groq": bool(GROQ_API_KEY)}
+    return {
+        "status": "ok" if bd_ok else "bd_error",
+        "service": "Face ID — Google Cloud Vision",
+        "vision_api": bool(client is not None)
+    }
 
-
-# ── DÉMARRAGE ────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
-    print(f"\n SmartRecruit — Face ID | Groq gratuit : {'✅' if GROQ_API_KEY else '❌ GROQ_API_KEY manquante dans .env'}")
-    print(f" Modèle texte  : {MODELE_TEXTE}")
-    print(f" Modèle vision : {MODELE_VISION}")
-    print(" Swagger : http://localhost:5000/docs\n")
-    uvicorn.run("face_id_service:app", host="0.0.0.0", port=5000, reload=True)
+    print("🚀 Face ID Service (Google Vision) - Port 5000")
+    uvicorn.run(app, host="0.0.0.0", port=5000)
