@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard CvMatchIA</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="dashboard.css?v=1.1">
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
   <!-- Lucide Icons — icônes professionnelles légères -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
