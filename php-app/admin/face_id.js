@@ -2,7 +2,7 @@
 // face_id.js — Interface Face ID avec Google Cloud Vision
 // ============================================================
 
-const FACEID_URL = 'https://faceid-service-827v.onrender.com'; // À adapter à votre URL Render
+const FACEID_URL = 'https://faceid-service-827v.onrender.com'; // À adapter
 let stream = null;
 let videoElement = null;
 
@@ -10,7 +10,6 @@ let videoElement = null;
 async function activerFaceID(adminId) {
     const btn = document.getElementById('btn-faceid');
     const statut = document.getElementById('faceid-statut');
-    const scanner = document.getElementById('faceid-scanner');
     const icone = document.getElementById('faceid-icone');
 
     if (!adminId) {
@@ -69,6 +68,8 @@ async function lancerFaceID() {
     const statut = document.getElementById('faceid-statut');
     const btn = document.getElementById('btn-scanner');
 
+    if (!btn) return;
+
     btn.disabled = true;
     if (scanner) scanner.classList.add('scan-actif');
     setIcone(icone, 'scan');
@@ -93,7 +94,6 @@ async function lancerFaceID() {
             setIcone(icone, 'check');
             afficherStatut(statut, 'succes', `Bienvenue ${data.admin_nom || ''} ! Vérification…`);
 
-            // Envoi du token à PHP
             const reponsePHP = await fetch('login.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -140,14 +140,16 @@ function capturerPhoto() {
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                         const photoBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                        // Nettoyer
                         arreterCamera();
-                        document.body.removeChild(video);
+                        if (video.parentNode) video.parentNode.removeChild(video);
                         resolve(photoBase64);
                     }, 300);
                 };
             })
             .catch(err => {
                 arreterCamera();
+                if (video.parentNode) video.parentNode.removeChild(video);
                 reject(new Error('Impossible d’accéder à la caméra : ' + err.message));
             });
     });
@@ -159,7 +161,11 @@ function arreterCamera() {
         stream = null;
     }
     if (videoElement && videoElement.parentNode) {
-        videoElement.parentNode.removeChild(videoElement);
+        try {
+            videoElement.parentNode.removeChild(videoElement);
+        } catch(e) {
+            // Ignorer si déjà supprimé
+        }
         videoElement = null;
     }
 }
