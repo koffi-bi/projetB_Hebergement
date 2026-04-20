@@ -73,7 +73,7 @@ if (!$admin) rediriger('login.php');
 </head>
 <body>
 <div class="faceid-activation">
-    <h1>😀 Activer Face ID</h1>
+    <h1> Activer Face ID</h1>
     <p>Bonjour <?= htmlspecialchars($admin['prenom'] . ' ' . $admin['nom']) ?>,<br>
     Activez la reconnaissance faciale pour vous connecter plus rapidement.</p>
 
