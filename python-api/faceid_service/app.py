@@ -39,7 +39,7 @@ client = vision.ImageAnnotatorClient()
 app = FastAPI(title="SmartRecruit — Face ID (Google Vision)", version="3.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://projetb-php-app-cvmatch.onrender.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
