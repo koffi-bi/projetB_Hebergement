@@ -16,7 +16,7 @@ app = FastAPI()
 # Configuration CORS (identique à votre service matching)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://projetb-php-app-cvmatch.onrender.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
