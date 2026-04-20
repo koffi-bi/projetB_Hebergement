@@ -1,24 +1,10 @@
-# ================================================================
-#  SmartRecruit — Dépendances Python
-#  Installation : pip install -r requirements.txt
-#
-#  Prérequis système Ubuntu/Debian (avant pip) :
-#      sudo apt install -y cmake build-essential python3-dev
-#      sudo apt install -y libboost-all-dev libopenblas-dev
-#
-#  Sur Windows : installer Visual Studio Build Tools avant dlib
-# ================================================================
 
-fastapi==0.115.0            
-uvicorn[standard]==0.30.6   
-openai==1.51.0              
-python-dotenv==1.0.1        
-opencv-python==4.10.0.84    
-face_recognition==1.3.0     
-dlib==19.24.4               
-numpy==1.26.4               
+#  Sur Windows : parfait pour pouvoir utiliser le service cloud vision api
+# Pour fACE-ID deja compiler contrairement a mon local que j'ai compiler moi-meme par dlib
 
-mysql-connector-python==8.4.0   
-pydantic==1.10.13                 
-python-multipart==0.0.12 
-groq
+fastapi
+uvicorn
+mysql-connector-python
+python-dotenv
+google-cloud-vision==3.10.2
+numpy
