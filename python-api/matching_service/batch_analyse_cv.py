@@ -18,7 +18,8 @@ DB = {
 }
 
 # URL de votre service matching (ajustez le port si nécessaire)
-API_URL = "http://localhost:5001/extraire-cv"
+# Au lieu de http://localhost:5001/extraire-cv
+API_URL = os.getenv("MATCHING_API_URL", "http://localhost:5001") + "/extraire-cv"
 
 # Chemin absolu vers le dossier des CVs
 # On part du dossier où se trouve ce script, on remonte deux niveaux,
