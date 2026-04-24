@@ -11,15 +11,6 @@
 *credential*
 
 # ============================================
-# DOSSIERS D'UPLOAD (CVs, PHOTOS DES CANDIDATS)
-# ============================================
-php-app/uploads/
-php-app/cv_uploads/
-uploads/
-*.pdf
-*.docx
-
-# ============================================
 # ENVIRONNEMENTS VIRTUELS PYTHON
 # ============================================
 venv/
