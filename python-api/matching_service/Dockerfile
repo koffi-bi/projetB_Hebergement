@@ -16,7 +16,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Télécharger le modèle français medium de spaCy
-RUN python -m spacy download fr_core_news_md
+RUN pip install https://github.com/explosion/spacy-models/releases/download/fr_core_news_md-3.7.0/fr_core_news_md-3.7.0-py3-none-any.whl
 
 # Copier le code source
 COPY . .
