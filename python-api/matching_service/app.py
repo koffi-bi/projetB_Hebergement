@@ -1,14 +1,3 @@
-# ================================================================
-#  SmartRecruit — Matching IA (Groq) v6
-#  Lancer : uvicorn matching_service:app --host 0.0.0.0 --port 5001 --reload
-#
-#  .env requis :
-#      GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxx
-#      RACINE_PROJET=C:\xampp\htdocs\ProjetB
-#
-#  pip install fastapi uvicorn groq mysql-connector-python
-#              python-dotenv pdfplumber python-docx
-# ================================================================
 
 import os, re, json, time, logging
 from datetime import datetime
@@ -24,9 +13,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ────────────────────────────────────────────────────────────────
+# ================================================================
 #  CONFIG
-# ────────────────────────────────────────────────────────────────
+# ================================================================
 
 DB = {
     "host":     os.getenv("DB_HOST",     "localhost"),
@@ -38,19 +27,15 @@ DB = {
 
 GROQ_API_KEY  = os.getenv("GROQ_API_KEY", "")
 RACINE_PROJET = os.getenv("RACINE_PROJET", r"C:\xampp\htdocs\ProjetB")
+TESSERACT_CMD = os.getenv("TESSERACT_CMD", "")
 MODELE        = "llama-3.3-70b-versatile"
-SCORE_MIN     = 10   # score minimum pour afficher un candidat
-
-# ────────────────────────────────────────────────────────────────
-#  INITIALISATION
-# ────────────────────────────────────────────────────────────────
+SCORE_MIN     = 10
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("matching")
 
 try:
-    _test = mysql.connector.connect(**DB)
-    _test.close()
+    _t = mysql.connector.connect(**DB); _t.close()
     log.info(f"MySQL OK — base : {DB['database']}")
 except Exception as e:
     log.error(f"MySQL ERREUR : {e}")
@@ -58,18 +43,16 @@ except Exception as e:
 groq_client = Groq(api_key=GROQ_API_KEY)
 
 app = FastAPI(title="SmartRecruit Matching IA", version="6.0", docs_url="/docs")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], allow_methods=["*"],
-    allow_headers=["*"], allow_credentials=True,
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"],
+                   allow_methods=["*"], allow_headers=["*"], allow_credentials=True)
 
-# ────────────────────────────────────────────────────────────────
-#  MODELES
-# ────────────────────────────────────────────────────────────────
+
+# ================================================================
+#  MODÈLES
+# ================================================================
 
 class RequeteChat(BaseModel):
-    question:        str  = Field(..., description="Message du recruteur")
+    question:        str  = Field(...)
     recruteur_id:    Optional[int] = None
     historique_chat: list = Field(default=[])
 
@@ -81,279 +64,420 @@ class RequeteAnalyserFichier(BaseModel):
     candidat_id: int
     chemin_cv:   str
 
-# ────────────────────────────────────────────────────────────────
-#  APPEL GROQ — avec retry sur rate limit 429
-#
-#  Toute la communication avec Groq passe par cette fonction.
-#  Si la limite de tokens est atteinte, on attend et on reessaie
-#  au lieu de planter avec une erreur 500.
-# ────────────────────────────────────────────────────────────────
+class RequeteUploadCV(BaseModel):
+    candidat_id: int
+    chemin_cv:   str
 
-def appeler_groq(messages: list, max_tokens: int = 300) -> str:
-    """
-    Envoie les messages a Groq et retourne le texte de la reponse.
-    Attend automatiquement si la limite de tokens est atteinte (429).
-    Leve HTTPException si impossible apres 3 tentatives.
-    """
+
+# ================================================================
+#  GROQ — APPEL CENTRALISÉ AVEC RETRY 429
+# ================================================================
+
+def groq_appel(messages: list, max_tokens: int = 300,
+               temperature: float = 0.2, json_mode: bool = False) -> str:
+    """Appel Groq avec retry automatique sur rate limit."""
+    kwargs = dict(model=MODELE, messages=messages,
+                  max_tokens=max_tokens, temperature=temperature)
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+
     for tentative in range(1, 4):
         try:
-            resp = groq_client.chat.completions.create(
-                model       = MODELE,
-                messages    = messages,
-                max_tokens  = max_tokens,
-                temperature = 0.1,
-            )
-            return resp.choices[0].message.content.strip()
-
+            resp = groq_client.chat.completions.create(**kwargs)
+            return resp.choices[0].message.content or ""
         except RateLimitError as e:
-            # Extraire le temps d'attente du message Groq
-            match = re.search(r"try again in (\d+)m([\d.]+)s", str(e))
-            attente = int(match.group(1)) * 60 + float(match.group(2)) if match else 30
-            attente = min(attente, 60)  # max 60s d'attente
-
-            log.warning(f"Rate limit Groq — tentative {tentative}/3, attente {attente:.0f}s")
-
+            m = re.search(r"try again in (\d+)m([\d.]+)s", str(e))
+            attente = min((int(m.group(1))*60 + float(m.group(2))) if m else 30, 60)
+            log.warning(f"Rate limit — tentative {tentative}/3, attente {attente:.0f}s")
             if tentative == 3:
-                raise HTTPException(429,
-                    "Limite de tokens Groq atteinte. "
-                    "Reessayez dans quelques minutes ou upgradez sur console.groq.com")
+                raise HTTPException(429, "Limite Groq atteinte. Réessayez dans quelques minutes.")
             time.sleep(attente)
-
         except Exception as e:
             raise HTTPException(500, f"Erreur Groq : {e}")
-
     return ""
 
 
 def nettoyer_json(texte: str) -> str:
-    """Supprime les balises markdown que Groq ajoute parfois autour du JSON."""
+    """Extrait le JSON même si Groq ajoute du texte parasite."""
     texte = re.sub(r"^```(?:json)?\s*", "", texte, flags=re.MULTILINE)
     texte = re.sub(r"\s*```$",          "", texte, flags=re.MULTILINE)
-    return texte.strip()
+    texte = texte.strip()
+    debut = texte.find("{"); fin = texte.rfind("}")
+    if debut != -1 and fin > debut:
+        return texte[debut:fin+1]
+    return texte
 
 
-# ────────────────────────────────────────────────────────────────
-#  BASE DE DONNEES
-# ────────────────────────────────────────────────────────────────
+# ================================================================
+#  CLASSIFICATION PYTHON PUR — ZÉRO GROQ
 
-def get_db():
-    return mysql.connector.connect(**DB)
+# Corrections orthographiques ivoiriennes les plus fréquentes
+CORRECTIONS = {
+    r"\bchaiche\b":      "cherche",
+    r"\bchèrche\b":      "cherche",
+    r"\bchairche\b":     "cherche",
+    r"\bcomaercial\b":   "commercial",
+    r"\bcommercail\b":   "commercial",
+    r"\binformaticein\b":"informaticien",
+    r"\bingenieure?\b":  "ingénieur",
+    r"\byamossoukro\b":  "yamoussoukro",
+    r"\byamoussokro\b":  "yamoussoukro",
+    r"\babidgane?\b":    "abidjan",
+    r"\bdeveloppeure?\b":"développeur",
+    r"\bcomercial\b":    "commercial",
+    r"\bsecretaire\b":   "secrétaire",
+    r"\bcomptabilite\b": "comptabilité",
+    r"\bmarketing\b":    "marketing",
+    r"\bmanageure?\b":   "manager",
+    r"\bplomberie\b":    "plombier",
+    r"\belectriciene?\b":"électricien",
+}
+
+# Mots qui signalent une conversation (pas une recherche)
+MOTS_CONVERSATION = {
+    "bonjour", "bonsoir", "salut", "hello", "hi", "allo",
+    "aide", "help", "comment", "fonctionner", "fonctionne",
+    "qu'est-ce", "qu'est", "merci", "svp", "stp",
+    "comment ça marche", "comment utiliser", "à quoi sert",
+}
+
+# Mots qui signalent une statistique
+MOTS_STATISTIQUE = {
+    "combien", "nombre", "total", "count", "statistique",
+    "stat", "résumé", "liste complète", "tous les candidats",
+    "tous les cv", "répartition", "moyenne",
+}
+
+# Mots à ignorer pour l'extraction de critères (stop words FR)
+STOP_WORDS = {
+    "je", "un", "une", "des", "les", "le", "la", "de", "du",
+    "et", "en", "que", "qui", "avec", "pour", "dans", "sur",
+    "cherche", "recherche", "voudrais", "veux", "besoin",
+    "trouver", "profil", "candidat", "cv", "voir", "avoir",
+    "plus", "moins", "ans", "année", "années", "mois",
+    "the", "of", "a", "an", "is", "are", "was",
+}
+
+# Villes ivoiriennes et africaines connues
+VILLES_CONNUES = {
+    "abidjan", "yamoussoukro", "bouaké", "bouake", "daloa",
+    "san pedro", "korhogo", "man", "divo", "gagnoa",
+    "abengourou", "bondoukou", "odienné", "odiénné",
+    "dakar", "accra", "lomé", "cotonou", "bamako",
+    "paris", "lyon", "marseille", "bordeaux",
+}
+
+# Synonymes de genre
+MOTS_FEMME = {"femme", "féminin", "féminine", "dame", "madame", "mlle", "mademoiselle"}
+MOTS_HOMME = {"homme", "masculin", "monsieur", "m.", "mr"}
 
 
-def serialiser(row: dict) -> dict:
-    """Convertit les types MySQL (datetime, Decimal) en types JSON."""
-    out = {}
-    for k, v in row.items():
-        if isinstance(v, datetime):
-            out[k] = v.isoformat()
-        elif hasattr(v, "__float__"):
-            out[k] = float(v)
-        else:
-            out[k] = v
-    return out
+def normaliser_question(question: str) -> str:
+    """Corrige les fautes d'orthographe courantes."""
+    q = question.lower().strip()
+    for pattern, remplacement in CORRECTIONS.items():
+        q = re.sub(pattern, remplacement, q, flags=re.IGNORECASE)
+    return q
 
 
-# ────────────────────────────────────────────────────────────────
-#  EXTRACTION DU TEXTE DES FICHIERS CV
-# ────────────────────────────────────────────────────────────────
-
-def lire_pdf(chemin: str) -> str:
-    texte = ""
-    try:
-        import pdfplumber
-        with pdfplumber.open(chemin) as pdf:
-            for page in pdf.pages:
-                t = page.extract_text()
-                if t:
-                    texte += t + "\n"
-    except Exception as e:
-        log.warning(f"PDF lecture : {e}")
-    return texte.strip()
-
-
-def lire_docx(chemin: str) -> str:
-    texte = ""
-    try:
-        from docx import Document
-        doc = Document(chemin)
-        for para in doc.paragraphs:
-            texte += para.text + "\n"
-        for table in doc.tables:
-            for row in table.rows:
-                texte += " | ".join(c.text for c in row.cells) + "\n"
-    except Exception as e:
-        log.warning(f"DOCX lecture : {e}")
-    return texte.strip()
-
-
-def lire_fichier_cv(chemin_relatif: str) -> str:
+def classifier_intention(question_norm: str) -> str:
     """
-    Lit le fichier CV et retourne son texte brut.
-    Reconstruit le chemin absolu a partir de RACINE_PROJET.
+    Classifie la question en : recherche / conversation / statistique.
+    Basé sur des mots-clés Python — déterministe, zéro Groq.
     """
-    chemin = os.path.join(RACINE_PROJET, chemin_relatif.lstrip("/\\"))
-    if not os.path.exists(chemin):
-        log.error(f"Fichier introuvable : {chemin}")
-        return ""
+    mots = set(re.findall(r'\b\w+\b', question_norm.lower()))
 
-    ext = Path(chemin).suffix.lower()
-    if ext == ".pdf":
-        return lire_pdf(chemin)
-    if ext in (".docx", ".doc"):
-        return lire_docx(chemin)
-    return ""
+    # Statistique
+    if mots & MOTS_STATISTIQUE:
+        return "statistique"
 
+    # Conversation pure (salutation sans critères métier)
+    if mots & MOTS_CONVERSATION:
+        # Si la question contient aussi un métier, c'est une recherche quand même
+        has_metier = bool(re.search(
+            r'\b(développeur|ingénieur|comptable|commercial|médecin|infirmier|'
+            r'mécanicien|plombier|électricien|secrétaire|manager|directeur|'
+            r'technicien|informaticien|marketing|communication|finance|'
+            r'juriste|avocat|architecte|designer|graphiste|data|analyst)\b',
+            question_norm, re.IGNORECASE
+        ))
+        if not has_metier:
+            return "conversation"
 
-# ────────────────────────────────────────────────────────────────
-#  ETAPE 1 — Groq comprend la question du recruteur
-#
-#  On envoie UN SEUL prompt court avec tout ce qu'il faut.
-#  Groq repond en JSON avec le type (recherche/conversation/stat)
-#  et les criteres de recherche normalises.
-#
-#  ECONOMIE DE TOKENS : prompt compact, historique limite a 2 echanges.
-# ────────────────────────────────────────────────────────────────
-
-PROMPT_INTENTION = """Tu es l'assistant RH d'un dashboard de recrutement en Cote d'Ivoire.
-
-TABLES DISPONIBLES :
-- candidats : id, prenom, nom, ville, genre, poste_actuel, experience_ans, competences, disponibilite, niveau_etude, bio, statut
-- cv : candidat_id, resume_ia (analyse complete du CV : competences, villes, secteurs, formations)
-
-MESSAGE RECRUTEUR : "{question}"
-
-REGLES :
-1. Corriger les fautes ("chaiche"=cherche, "comaercial"=commercial, "yamossoukro"=Yamoussoukro)
-2. Si c'est une recherche de profil -> type=recherche
-3. Si c'est une salutation ou question generale -> type=conversation
-4. Si c'est une demande de stats/chiffres -> type=statistique
-
-Reponds UNIQUEMENT avec ce JSON valide :
-{{
-  "type": "recherche" | "conversation" | "statistique",
-  "reponse_directe": "texte si conversation, sinon null",
-  "requete_normalisee": "la requete en francais correct",
-  "criteres": {{
-    "poste": "intitule du poste ou null",
-    "ville": "ville en minuscules ou null",
-    "genre": "homme" | "femme" | null,
-    "exp_min": nombre ou null,
-    "competences": ["comp1", "comp2"],
-    "mots_cles": ["tous les mots importants de la requete"]
-  }}
-}}"""
+    return "recherche"
 
 
-def comprendre_question(question: str, historique: list) -> dict:
+def extraire_criteres(question_norm: str, question_orig: str) -> dict:
     """
-    Etape 1 : Groq analyse la question et retourne les criteres.
-    Prompt tres court = peu de tokens consommes.
+    Extrait TOUS les critères de recherche en Python pur.
+    Déterministe : même question → mêmes critères → même SQL → mêmes résultats.
+
+    Stratégie :
+    1. Genre : mots-clés explicites
+    2. Expérience : regex "X ans"
+    3. Ville : liste de villes connues + pattern géographique
+    4. Poste : pattern métier après "cherche", "profil", etc.
+    5. Compétences : liste de technologies/métiers connus
+    6. Prénom + Nom : deux mots capitalisés consécutifs
+    7. Mots-clés libres : tous les mots significatifs restants
     """
-    # Historique limite aux 2 derniers echanges pour economiser les tokens
-    ctx = ""
-    for msg in historique[-2:]:
-        role = "Recruteur" if msg.get("role") == "user" else "IA"
-        ctx += f"{role}: {msg.get('content','')}\n"
+    criteres = {
+        "genre": None,
+        "ville": None,
+        "exp_min": None,
+        "exp_max": None,
+        "poste": None,
+        "competences": [],
+        "mots_cles_libres": [],
+        "disponibilite": None,
+        "niveau": None,
+        "prenom_nom": None,   # nouveau : prénom + nom recherché
+    }
 
-    prompt = PROMPT_INTENTION.format(question=question)
-    if ctx:
-        prompt = f"CONTEXTE RECENT:\n{ctx}\n\n" + prompt
+    q = question_norm.lower()
 
-    reponse = appeler_groq(
-        messages   = [{"role": "user", "content": prompt}],
-        max_tokens = 350,
+    # ── 1. GENRE 
+    mots_q = set(re.findall(r'\b\w+\b', q))
+    if mots_q & MOTS_FEMME:
+        criteres["genre"] = "femme"
+    elif mots_q & MOTS_HOMME:
+        criteres["genre"] = "homme"
+
+    # ── 2. EXPÉRIENCE ──
+    # "3 ans", "plus de 2 ans", "minimum 5 ans", "2 à 5 ans"
+    m = re.search(r'(\d+)\s*(?:à|-)\s*(\d+)\s*ans', q)
+    if m:
+        criteres["exp_min"] = int(m.group(1))
+        criteres["exp_max"] = int(m.group(2))
+    else:
+        m = re.search(r'(?:plus\s*de|minimum|min\.?|au\s*moins|>\s*)?\s*(\d+)\s*ans', q)
+        if m:
+            val = int(m.group(1))
+            # "plus de 2 ans" → exp_min=2, sinon c'est une valeur exacte
+            if re.search(r'plus\s*de|minimum|min\.?|au\s*moins', q):
+                criteres["exp_min"] = val
+            else:
+                criteres["exp_min"] = max(0, val - 1)  # tolérance ±1
+
+    # ── 3. DISPONIBILITÉ ──
+    if re.search(r'imm[eé]diat|disponible\s*maintenant|tout\s*de\s*suite', q):
+        criteres["disponibilite"] = "immediat"
+    elif re.search(r'1\s*mois|dans\s*un\s*mois', q):
+        criteres["disponibilite"] = "1_mois"
+    elif re.search(r'3\s*mois|dans\s*trois\s*mois', q):
+        criteres["disponibilite"] = "3_mois"
+
+    # ── 4. NIVEAU D'ÉTUDES ───
+    if re.search(r'master|bac\+5|bac\s*\+\s*5|m2\b', q):
+        criteres["niveau"] = "Master (Bac+5)"
+    elif re.search(r'licence|bac\+3|bac\s*\+\s*3|l3\b', q):
+        criteres["niveau"] = "Licence (Bac+3)"
+    elif re.search(r'ing[eé]nieur|bac\+[45]|école', q):
+        criteres["niveau"] = "Ingénieur"
+    elif re.search(r'bts|bac\+2|bac\s*\+\s*2', q):
+        criteres["niveau"] = "BTS"
+
+    # ── 5. VILLE ─────
+    for ville in VILLES_CONNUES:
+        if re.search(r'\b' + re.escape(ville) + r'\b', q):
+            criteres["ville"] = ville
+            break
+    # Fallback : "à <Mot>" ou "de <Mot>"
+    if not criteres["ville"]:
+        m = re.search(r'(?:à|a|de|depuis|en)\s+([A-ZÀ-Ÿa-zà-ÿ]{3,})', question_norm)
+        if m:
+            ville_candidate = m.group(1).lower().strip()
+            if ville_candidate not in STOP_WORDS and len(ville_candidate) > 3:
+                criteres["ville"] = ville_candidate
+
+    # ── 6. POSTE / MÉTIER ───
+    # D'abord après les mots déclencheurs
+    m = re.search(
+        r'(?:cherche|recherche|profil\s+de|poste\s+de|cv\s+de|candidat\s+(?:pour|de)?)\s+'
+        r'(?:un|une|un\s|une\s)?\s*([a-zà-ÿ\s\-]+?)(?:\s+(?:avec|qui|de|à|pour|ayant|et|,|$))',
+        q
     )
+    if m:
+        poste_brut = m.group(1).strip().rstrip()
+        if len(poste_brut) > 2 and poste_brut not in STOP_WORDS:
+            criteres["poste"] = poste_brut
 
-    try:
-        return json.loads(nettoyer_json(reponse))
-    except json.JSONDecodeError:
-        # Fallback : traiter comme recherche avec les mots de la question
-        log.warning("JSON intention invalide — fallback recherche brute")
-        return {
-            "type": "recherche",
-            "reponse_directe": None,
-            "requete_normalisee": question,
-            "criteres": {
-                "poste": None,
-                "ville": None,
-                "genre": None,
-                "exp_min": None,
-                "competences": [],
-                "mots_cles": [m for m in question.split() if len(m) > 2],
-            }
-        }
+    # Si pas trouvé, chercher les métiers connus directement
+    METIERS = [
+        "développeur", "developer", "dev", "ingénieur", "engineer",
+        "comptable", "commercial", "médecin", "infirmier", "infirmière",
+        "mécanicien", "mécanicienne", "plombier", "électricien", "électricienne",
+        "secrétaire", "manager", "directeur", "directrice",
+        "technicien", "technicienne", "informaticien", "informaticienne",
+        "data scientist", "data analyst", "analyste", "consultant",
+        "graphiste", "designer", "architecte", "juriste", "avocat",
+        "chargé de communication", "chargé de marketing",
+        "responsable", "chef de projet", "project manager",
+        "web developer", "full stack", "fullstack", "frontend", "backend",
+        "devops", "sysadmin", "administrateur système",
+        "pharmacien", "chirurgien", "laborantin",
+        "enseignant", "professeur", "formateur",
+        "logisticien", "supply chain", "acheteur",
+        "rh", "ressources humaines", "recruteur",
+        "community manager", "digital", "e-commerce",
+    ]
+    if not criteres["poste"]:
+        for metier in METIERS:
+            if re.search(r'\b' + re.escape(metier) + r'\b', q, re.IGNORECASE):
+                criteres["poste"] = metier
+                break
+
+    # ── 7. COMPÉTENCES TECHNIQUES ──
+    TECHS = [
+        "php", "mysql", "javascript", "python", "java", "react", "vue",
+        "angular", "nodejs", "laravel", "symfony", "django", "flask",
+        "html", "css", "sql", "postgresql", "mongodb", "redis",
+        "docker", "kubernetes", "aws", "azure", "git", "linux",
+        "word", "excel", "powerpoint", "powerbi", "tableau",
+        "photoshop", "illustrator", "figma",
+        "sap", "sage", "salesforce", "odoo",
+        "c++", "c#", ".net", "kotlin", "swift", "flutter",
+        "machine learning", "deep learning", "tensorflow", "pytorch",
+    ]
+    comps = []
+    for tech in TECHS:
+        if re.search(r'\b' + re.escape(tech) + r'\b', q, re.IGNORECASE):
+            comps.append(tech)
+    criteres["competences"] = comps
+
+    # ── 8. PRÉNOM + NOM (recherche nominative) ───────────────────
+    # Chercher deux mots capitalisés consécutifs dans la question originale
+    # qui ne sont pas des mots de la question
+    mots_orig = re.findall(r'\b[A-ZÀ-Ÿ][a-zà-ÿ]{1,}\b', question_orig)
+    mots_non_stop_orig = [
+        m for m in mots_orig
+        if m.lower() not in {"Cherche", "Recherche", "Bonjour", "Salut",
+                              "CV", "Profil", "Candidat", "Master", "BTS",
+                              "Abidjan", "Bouaké", "Yamoussoukro"}
+        and m.lower() not in STOP_WORDS
+    ]
+    # Si on a deux mots capitalisés, c'est probablement un prénom + nom
+    if len(mots_non_stop_orig) >= 2:
+        criteres["prenom_nom"] = (mots_non_stop_orig[0], mots_non_stop_orig[1])
+        log.info(f"Prénom/Nom détecté : {criteres['prenom_nom']}")
+
+    # ── 9. MOTS-CLÉS LIBRES ───
+    # Tous les mots significatifs de la question normalisée
+    # (pour la recherche dans cv.resume_ia et les autres champs)
+    mots_libres = []
+    for mot in re.findall(r'\b[a-zà-ÿ]{3,}\b', q):
+        if (mot not in STOP_WORDS
+                and mot not in {"cherche", "recherche", "profil", "candidat", "cv"}
+                and len(mot) > 2):
+            mots_libres.append(mot)
+    # Dédupliquer en gardant l'ordre
+    vu = set()
+    criteres["mots_cles_libres"] = [
+        m for m in mots_libres if not (m in vu or vu.add(m))
+    ]
+
+    return criteres
 
 
-# ────────────────────────────────────────────────────────────────
-#  ETAPE 2 — Construction du SQL en Python pur
+# ================================================================
+#  CONSTRUCTION SQL — PYTHON PUR, DÉTERMINISTE
 #
-#  On ne laisse PAS Groq ecrire le SQL — ca causait des erreurs 1064.
-#  Le SQL est construit directement en Python a partir des criteres
-#  retournes par Groq. Zero risque d'erreur de syntaxe.
-#
-#  Chaque critere cherche dans le formulaire ET dans cv.resume_ia
-#  (le texte complet du CV analyse).
-# ────────────────────────────────────────────────────────────────
+#  Règle clé : chaque critère cherche dans le formulaire ET
+#  dans cv.resume_ia pour trouver les candidats dont le formulaire
+#  est incomplet mais le CV bien analysé.
+# ================================================================
 
 def construire_sql(criteres: dict) -> str:
     """
-    Construit le SQL de recherche en Python pur.
-    Cherche dans les champs du formulaire ET dans cv.resume_ia (contenu du CV).
+    SQL 100% Python. Même critères → même SQL → mêmes résultats.
+    Toujours. Sans surprise.
     """
-    def esc(s: str) -> str:
-        """Echappe les apostrophes pour eviter les injections SQL."""
-        return s.replace("'", "\\'")
+    def s(v: str) -> str:
+        """Échappe les apostrophes pour éviter les injections SQL."""
+        return v.replace("'", "\\'") if v else ""
 
-    conditions = ["c.statut = 'actif'"]
+    conds = ["c.statut = 'actif'"]
 
     # Genre
     if criteres.get("genre"):
-        conditions.append(f"LOWER(c.genre) = '{esc(criteres['genre'].lower())}'")
+        g = s(criteres["genre"].lower())
+        conds.append(f"LOWER(c.genre) = '{g}'")
 
-    # Experience minimale
+    # Expérience
     if criteres.get("exp_min") is not None:
-        conditions.append(f"c.experience_ans >= {int(criteres['exp_min'])}")
+        conds.append(f"c.experience_ans >= {int(criteres['exp_min'])}")
+    if criteres.get("exp_max") is not None:
+        conds.append(f"c.experience_ans <= {int(criteres['exp_max'])}")
 
-    # Ville — cherche dans la fiche ET dans le CV analyse
+    # Disponibilité
+    if criteres.get("disponibilite"):
+        conds.append(f"c.disponibilite = '{s(criteres['disponibilite'])}'")
+
+    # Niveau
+    if criteres.get("niveau"):
+        n = s(criteres["niveau"])
+        conds.append(f"LOWER(c.niveau_etude) LIKE LOWER('%{n}%')")
+
+    # Ville — formulaire ET cv.resume_ia
     if criteres.get("ville"):
-        v = esc(criteres["ville"].lower())
-        conditions.append(
-            f"(LOWER(c.ville) LIKE '%{v}%' OR LOWER(cv.resume_ia) LIKE '%{v}%')"
+        v = s(criteres["ville"].lower())
+        conds.append(
+            f"(LOWER(c.ville) LIKE '%{v}%' "
+            f"OR LOWER(cv.resume_ia) LIKE '%{v}%')"
         )
 
-    # Poste — cherche dans la fiche ET dans le CV analyse
+    # Poste — toutes les colonnes texte + CV
     if criteres.get("poste"):
-        p = esc(criteres["poste"].lower())
-        conditions.append(
+        p = s(criteres["poste"].lower())
+        conds.append(
             f"(LOWER(c.poste_actuel) LIKE '%{p}%' "
             f"OR LOWER(c.competences) LIKE '%{p}%' "
             f"OR LOWER(c.bio) LIKE '%{p}%' "
             f"OR LOWER(cv.resume_ia) LIKE '%{p}%')"
         )
 
-    # Competences — chacune cherchee dans la fiche ET le CV
-    for comp in criteres.get("competences", []):
-        if comp.strip():
-            c = esc(comp.strip().lower())
-            conditions.append(
+    # Compétences techniques
+    for comp in (criteres.get("competences") or []):
+        if comp and comp.strip():
+            c = s(comp.strip().lower())
+            conds.append(
                 f"(LOWER(c.competences) LIKE '%{c}%' "
                 f"OR LOWER(c.bio) LIKE '%{c}%' "
                 f"OR LOWER(cv.resume_ia) LIKE '%{c}%')"
             )
 
-    # Mots-cles libres — cherche dans TOUS les champs texte
-    for mot in criteres.get("mots_cles", []):
-        if mot.strip() and len(mot.strip()) > 2:
-            m = esc(mot.strip().lower())
-            conditions.append(
-                f"(LOWER(c.poste_actuel) LIKE '%{m}%' "
-                f"OR LOWER(c.competences) LIKE '%{m}%' "
-                f"OR LOWER(c.bio) LIKE '%{m}%' "
-                f"OR LOWER(c.ville) LIKE '%{m}%' "
-                f"OR LOWER(cv.resume_ia) LIKE '%{m}%')"
-            )
+    # Prénom + Nom (recherche nominative — la plus prioritaire)
+    if criteres.get("prenom_nom"):
+        prenom, nom = criteres["prenom_nom"]
+        p_safe = s(prenom.lower())
+        n_safe = s(nom.lower())
+        # Condition OR : soit les deux mots dans prenom+nom, soit dans resume_ia
+        conds.append(
+            f"(("
+            f"LOWER(c.prenom) LIKE '%{p_safe}%' "
+            f"AND LOWER(c.nom) LIKE '%{n_safe}%'"
+            f") OR ("
+            f"LOWER(c.prenom) LIKE '%{n_safe}%' "
+            f"AND LOWER(c.nom) LIKE '%{p_safe}%'"  # ordre inversé au cas où
+            f") OR LOWER(cv.resume_ia) LIKE '%{p_safe}%' "
+            f"OR LOWER(cv.resume_ia) LIKE '%{n_safe}%')"
+        )
 
-    where = " AND ".join(conditions)
+    # Mots-clés libres — dernier filet, cherche partout
+    for mot in (criteres.get("mots_cles_libres") or []):
+        if mot and len(mot.strip()) > 2:
+            m = s(mot.strip().lower())
+            # Ne pas ajouter si déjà couvert par poste ou compétences
+            if not any(m in str(c) for c in conds):
+                conds.append(
+                    f"(LOWER(c.poste_actuel) LIKE '%{m}%' "
+                    f"OR LOWER(c.competences) LIKE '%{m}%' "
+                    f"OR LOWER(c.bio) LIKE '%{m}%' "
+                    f"OR LOWER(c.ville) LIKE '%{m}%' "
+                    f"OR LOWER(cv.resume_ia) LIKE '%{m}%')"
+                )
+
+    where = " AND ".join(conds)
 
     return (
         "SELECT c.id, c.prenom, c.nom, c.email, c.telephone, c.ville, "
@@ -363,319 +487,492 @@ def construire_sql(criteres: dict) -> str:
         "cv.type_fichier, cv.resume_ia, cv.statut_analyse "
         "FROM candidats c "
         "LEFT JOIN cv ON cv.id = ("
-        "  SELECT id FROM cv WHERE candidat_id = c.id ORDER BY date_upload DESC LIMIT 1"
-        ") "
+        "SELECT id FROM cv WHERE candidat_id = c.id "
+        "ORDER BY date_upload DESC LIMIT 1) "
         f"WHERE {where} "
         "ORDER BY c.experience_ans DESC "
         "LIMIT 50"
     )
 
 
-# ────────────────────────────────────────────────────────────────
-#  ETAPE 3 — Groq evalue chaque candidat
+# ================================================================
+#  SQL ÉLARGI — si la recherche stricte ne trouve rien
 #
-#  On envoie un profil TRES COMPACT a Groq (pas tout le CV).
-#  Groq repond avec un score et une courte justification.
-#
-#  ECONOMIE DE TOKENS : profil limite a l'essentiel, reponse courte.
-# ────────────────────────────────────────────────────────────────
+#  Au lieu de dire "0 résultat", on tente une recherche plus large
+#  avec seulement les mots-clés les plus importants.
+# ================================================================
 
-PROMPT_SCORE = """Evalue ce candidat pour la recherche suivante. Reponds UNIQUEMENT en JSON.
-
-RECHERCHE : "{question}"
-CANDIDAT :
-- Poste : {poste}
-- Experience : {experience} ans
-- Ville : {ville}
-- Competences : {competences}
-- Extrait CV : {extrait_cv}
-
-JSON attendu :
-{{"score": <0-100>, "resume": "<1 phrase expliquant le score>"}}
-
-Bareme : 90+=parfait | 70-89=bon | 50-69=correct | <50=faible"""
-
-
-def scorer_candidat(candidat: dict, question: str, ville_cible: str) -> tuple[int, str]:
+def construire_sql_elargi(criteres: dict) -> str:
     """
-    Etape 3 : Groq attribue un score au candidat.
-    Prompt tres court pour economiser les tokens.
-    Retourne (score, resume).
+    SQL de fallback : uniquement poste + mots-clés libres, sans les
+    filtres stricts (genre, exp, dispo). Retourne plus de candidats.
     """
-    # Extrait du CV analyse — limite a 300 caracteres pour economiser les tokens
-    extrait_cv = (candidat.get("resume_ia") or "")[:300]
-    if not extrait_cv:
-        extrait_cv = "CV non encore analyse"
+    def s(v: str) -> str:
+        return v.replace("'", "\\'") if v else ""
 
-    prompt = PROMPT_SCORE.format(
-        question    = question,
-        poste       = candidat.get("poste_actuel") or "non renseigne",
-        experience  = candidat.get("experience_ans") or 0,
-        ville       = candidat.get("ville") or "non renseignee",
-        competences = (candidat.get("competences") or "non renseignees")[:150],
-        extrait_cv  = extrait_cv,
+    conds = ["c.statut = 'actif'"]
+
+    # Poste seulement
+    if criteres.get("poste"):
+        p = s(criteres["poste"].lower())
+        conds.append(
+            f"(LOWER(c.poste_actuel) LIKE '%{p}%' "
+            f"OR LOWER(c.competences) LIKE '%{p}%' "
+            f"OR LOWER(c.bio) LIKE '%{p}%' "
+            f"OR LOWER(cv.resume_ia) LIKE '%{p}%')"
+        )
+
+    # Prénom + Nom
+    if criteres.get("prenom_nom"):
+        prenom, nom = criteres["prenom_nom"]
+        p_safe = s(prenom.lower())
+        n_safe = s(nom.lower())
+        conds.append(
+            f"(LOWER(c.prenom) LIKE '%{p_safe}%' "
+            f"OR LOWER(c.nom) LIKE '%{n_safe}%' "
+            f"OR LOWER(c.prenom) LIKE '%{n_safe}%' "
+            f"OR LOWER(c.nom) LIKE '%{p_safe}%')"
+        )
+
+    # Mots-clés libres les plus longs (les plus spécifiques)
+    mots = sorted(
+        [m for m in (criteres.get("mots_cles_libres") or []) if len(m) > 3],
+        key=len, reverse=True
+    )[:3]  # max 3 mots pour ne pas trop filtrer
+    for mot in mots:
+        m = s(mot.lower())
+        conds.append(
+            f"(LOWER(c.poste_actuel) LIKE '%{m}%' "
+            f"OR LOWER(c.competences) LIKE '%{m}%' "
+            f"OR LOWER(c.bio) LIKE '%{m}%' "
+            f"OR LOWER(cv.resume_ia) LIKE '%{m}%')"
+        )
+
+    where = " AND ".join(conds) if len(conds) > 1 else "c.statut = 'actif'"
+
+    return (
+        "SELECT c.id, c.prenom, c.nom, c.email, c.telephone, c.ville, "
+        "c.genre, c.poste_actuel, c.experience_ans, c.competences, "
+        "c.disponibilite, c.niveau_etude, c.photo, c.date_naissance, c.bio, "
+        "cv.chemin AS cv_chemin, cv.nom_fichier AS cv_nom, "
+        "cv.type_fichier, cv.resume_ia, cv.statut_analyse "
+        "FROM candidats c "
+        "LEFT JOIN cv ON cv.id = ("
+        "SELECT id FROM cv WHERE candidat_id = c.id "
+        "ORDER BY date_upload DESC LIMIT 1) "
+        f"WHERE {where} "
+        "ORDER BY c.experience_ans DESC "
+        "LIMIT 20"
     )
 
-    reponse = appeler_groq(
-        messages   = [{"role": "user", "content": prompt}],
-        max_tokens = 80,  # reponse tres courte : score + 1 phrase
-    )
 
+# ================================================================
+#  BASE DE DONNÉES
+# ================================================================
+
+def get_db():
+    return mysql.connector.connect(**DB)
+
+def propre(row: dict) -> dict:
+    out = {}
+    for k, v in row.items():
+        if isinstance(v, datetime): out[k] = v.isoformat()
+        elif hasattr(v, "__float__"): out[k] = float(v)
+        else: out[k] = v
+    return out
+
+
+# ================================================================
+#  GROQ — SCORING (seul appel Groq lors d'une recherche)
+#
+#  Prompt DeepSeek intégré : score + justification + points forts/faibles
+# ================================================================
+
+SYSTEM_SCORING = """Tu es expert RH. Évalue la pertinence d'un profil pour une recherche.
+Retourne UNIQUEMENT ce JSON :
+{
+  "score": <0-100>,
+  "justification": "<1 phrase>",
+  "points_forts": "<points forts>",
+  "points_faibles": "<points faibles>",
+  "competences_detectees": "<compétences clés>"
+}
+Barème : 90+=parfait | 70-89=bon | 50-69=correct | 30-49=faible | <30=hors sujet
+- Si cv_analyse rempli : s'y fier en priorité sur le formulaire
+- Synonymes acceptés : JS=JavaScript, dev=développeur, comm=communication
+- Profil vide → score 0-15""".strip()
+
+
+def groq_scorer(candidat: dict, question: str, criteres: dict) -> tuple[int, str]:
+    """Groq score un candidat. 1 appel, réponse courte = peu de tokens."""
+    cv_info = (candidat.get("resume_ia") or "")[:400]
+    profil = {
+        "poste":       candidat.get("poste_actuel", "—"),
+        "exp":         f"{candidat.get('experience_ans', 0)} ans",
+        "ville":       candidat.get("ville", "—"),
+        "competences": (candidat.get("competences") or "")[:150],
+        "cv":          cv_info or "non analysé",
+    }
+    filtre = criteres.get("ville") or ""
+    msg = (
+        f'RECHERCHE: "{question}"\n'
+        f"FILTRE VILLE: {filtre or 'aucun'}\n"
+        f"PROFIL: {json.dumps(profil, ensure_ascii=False)}"
+    )
     try:
-        r = json.loads(nettoyer_json(reponse))
+        contenu = groq_appel(
+            messages=[
+                {"role": "system", "content": SYSTEM_SCORING},
+                {"role": "user",   "content": msg},
+            ],
+            max_tokens=180,
+            temperature=0.1,
+            json_mode=True,
+        )
+        r     = json.loads(nettoyer_json(contenu))
         score = max(0, min(100, int(r.get("score", 0))))
-        return score, r.get("resume", "")
-    except Exception:
+        res   = r.get("justification", "")
+        if r.get("points_forts"):
+            res += f" | ✅ {r['points_forts']}"
+        if r.get("competences_detectees"):
+            res += f" | 🔧 {r['competences_detectees']}"
+        return score, res[:350]
+    except Exception as e:
+        log.warning(f"Scorer : {e}")
         return 50, "Profil potentiellement pertinent."
 
 
-# ────────────────────────────────────────────────────────────────
-#  ANALYSE PROFONDE D'UN CV
-#
-#  Appele une seule fois par CV (au moment de l'upload).
-#  Le resultat est stocke dans cv.resume_ia et reutilise ensuite
-#  pour tous les matchings — zero token gaspille.
-# ────────────────────────────────────────────────────────────────
+# ================================================================
+#  GROQ — RÉPONSE NATURELLE (1 appel, compact)
+# ================================================================
 
-PROMPT_ANALYSE_CV = """Analyse ce CV et extrais les informations cles. Reponds UNIQUEMENT en JSON.
-
-CV :
----
-{texte}
----
-
-JSON attendu :
-{{
-  "poste": "intitule du poste principal",
-  "experience_ans": nombre_entier,
-  "competences": ["comp1", "comp2", "comp3"],
-  "villes": ["ville1", "ville2"],
-  "secteurs": ["secteur1"],
-  "formations": ["diplome - etablissement"],
-  "langues": ["Francais"],
-  "resume": "3-4 phrases sur le profil, ses competences, son parcours et sa localisation"
-}}"""
-
-
-def analyser_cv_avec_groq(texte_cv: str, candidat: dict) -> dict:
+def groq_reponse_naturelle(question: str, nb: int,
+                            criteres: dict, elargi: bool = False) -> str:
     """
-    Groq lit le CV et extrait toutes les informations importantes.
-    Le champ 'resume' sera stocke dans cv.resume_ia pour les recherches futures.
+    Groq formule la réponse finale en langage naturel.
+    Beaucoup moins de tokens que de lui faire tout analyser.
     """
-    texte = texte_cv[:5000]  # limite raisonnable
-
-    reponse = appeler_groq(
-        messages   = [{"role": "user", "content": PROMPT_ANALYSE_CV.format(texte=texte)}],
-        max_tokens = 600,
-    )
-
+    if nb > 0:
+        extra = " (recherche élargie — certains critères assouplis)" if elargi else ""
+        return (
+            f"J'ai trouvé {nb} candidat{'s' if nb>1 else ''} "
+            f"correspondant à votre recherche{extra}."
+        )
+    # 0 résultat : Groq propose des alternatives
     try:
-        return json.loads(nettoyer_json(reponse))
-    except json.JSONDecodeError:
-        log.error("Analyse CV : JSON invalide retourne par Groq")
-        return {}
-
-
-def fusionner_competences(existantes: str, nouvelles_liste: list) -> str:
-    """Fusionne sans doublons (insensible a la casse)."""
-    connus = {c.strip().lower() for c in existantes.split(",") if c.strip()}
-    result = [c for c in existantes.split(",") if c.strip()]
-    for c in nouvelles_liste:
-        if c.strip() and c.strip().lower() not in connus:
-            result.append(c.strip())
-            connus.add(c.strip().lower())
-    return ", ".join(result)
-
-
-def analyser_cv_en_attente() -> int:
-    """
-    Analyse tous les CV avec statut 'en_attente'.
-    Appele au demarrage et via POST /analyser-cv-en-attente.
-    """
-    db  = get_db()
-    cur = db.cursor(dictionary=True)
-    cur.execute("""
-        SELECT cv.id AS cv_id, cv.chemin, cv.candidat_id,
-               c.prenom, c.nom, c.poste_actuel, c.ville, c.competences, c.bio
-        FROM cv
-        JOIN candidats c ON c.id = cv.candidat_id
-        WHERE cv.statut_analyse = 'en_attente' AND cv.chemin IS NOT NULL
-        LIMIT 10
-    """)
-    cvs = cur.fetchall()
-    nb  = 0
-
-    for cv in cvs:
-        texte = lire_fichier_cv(cv["chemin"])
-        if not texte:
-            cur.execute("UPDATE cv SET statut_analyse='erreur' WHERE id=%s", (cv["cv_id"],))
-            db.commit()
-            continue
-
-        try:
-            donnees = analyser_cv_avec_groq(texte, cv)
-        except HTTPException as e:
-            log.error(f"Rate limit pendant analyse batch : {e.detail}")
-            break  # Arreter proprement, ne pas planter
-
-        if not donnees:
-            continue
-
-        # Construire le resume_ia : texte riche et indexable pour les recherches
-        resume_ia = (
-            f"POSTE: {donnees.get('poste', '')}\n"
-            f"SECTEURS: {', '.join(donnees.get('secteurs', []))}\n"
-            f"VILLES: {', '.join(donnees.get('villes', []))}\n"
-            f"FORMATIONS: {', '.join(donnees.get('formations', []))}\n"
-            f"LANGUES: {', '.join(donnees.get('langues', []))}\n"
-            f"RESUME: {donnees.get('resume', '')}"
-        )
-
-        competences = fusionner_competences(
-            cv.get("competences") or "",
-            donnees.get("competences", [])
-        )
-
+        db  = get_db()
+        cur = db.cursor(dictionary=True)
         cur.execute(
-            "UPDATE cv SET statut_analyse='analyse', resume_ia=%s WHERE id=%s",
-            (resume_ia, cv["cv_id"])
+            "SELECT c.prenom, c.nom, c.poste_actuel, c.ville, c.experience_ans, "
+            "LEFT(cv.resume_ia, 150) AS cv_resume "
+            "FROM candidats c "
+            "LEFT JOIN cv ON cv.id=(SELECT id FROM cv WHERE candidat_id=c.id "
+            "ORDER BY date_upload DESC LIMIT 1) "
+            "WHERE c.statut='actif' ORDER BY c.date_inscription DESC LIMIT 5"
         )
-        cur.execute("""
-            UPDATE candidats
-            SET competences    = %s,
-                bio            = IF(bio IS NULL OR bio='', %s, bio),
-                poste_actuel   = IF(poste_actuel IS NULL OR poste_actuel='', %s, poste_actuel),
-                experience_ans = IF(experience_ans=0 OR experience_ans IS NULL, %s, experience_ans)
-            WHERE id = %s
-        """, (
-            competences,
-            donnees.get("resume", ""),
-            donnees.get("poste", ""),
-            int(donnees.get("experience_ans", 0)),
-            cv["candidat_id"],
-        ))
-        db.commit()
-        nb += 1
-        log.info(f"CV #{cv['candidat_id']} analyse : {donnees.get('poste','?')}")
+        profils = cur.fetchall()
+        cur.close(); db.close()
 
-    cur.close()
-    db.close()
-    return nb
+        if not profils:
+            return "Aucun candidat dans la base. Demandez aux candidats de s'inscrire."
+
+        liste = "\n".join(
+            f"- {p['prenom']} {p['nom']} | {p['poste_actuel'] or '?'} | "
+            f"{p['ville'] or '?'} | {p['experience_ans'] or 0}ans"
+            for p in profils
+        )
+        contenu = groq_appel(
+            messages=[{"role": "user", "content": (
+                f'Recherche: "{question}"\nAucun résultat exact.\n\n'
+                f"Profils disponibles:\n{liste}\n\n"
+                "En 3 phrases: explique l'absence, propose 1-2 profils proches, "
+                "suggère de reformuler. Sois direct."
+            )}],
+            max_tokens=200,
+            temperature=0.3,
+        )
+        return contenu.strip()
+    except Exception:
+        return (
+            f"Aucun candidat ne correspond exactement à « {question} ». "
+            "Essayez des critères plus larges ou vérifiez que les CV ont été analysés."
+        )
 
 
-# ────────────────────────────────────────────────────────────────
-#  STATISTIQUES
-# ────────────────────────────────────────────────────────────────
+# ================================================================
+#  GROQ — STATISTIQUES
+# ================================================================
 
 def repondre_statistiques(question: str) -> str:
-    """Recupère les stats en base et demande à Groq de les formuler."""
+    """Lit les stats en base (SQL Python) et demande à Groq de les formuler."""
     db  = get_db()
     cur = db.cursor(dictionary=True)
     stats = {}
     try:
         cur.execute("SELECT COUNT(*) AS n FROM candidats WHERE statut='actif'")
-        stats["candidats_actifs"] = cur.fetchone()["n"]
-
+        stats["candidats"] = cur.fetchone()["n"]
         cur.execute("SELECT COUNT(*) AS n FROM cv WHERE statut_analyse='analyse'")
         stats["cv_analyses"] = cur.fetchone()["n"]
-
         cur.execute("SELECT COUNT(*) AS n FROM cv WHERE statut_analyse='en_attente'")
         stats["cv_en_attente"] = cur.fetchone()["n"]
-
         cur.execute("SELECT COUNT(*) AS n FROM candidats WHERE LOWER(genre)='femme' AND statut='actif'")
         stats["femmes"] = cur.fetchone()["n"]
-
         cur.execute("SELECT COUNT(*) AS n FROM candidats WHERE LOWER(genre)='homme' AND statut='actif'")
         stats["hommes"] = cur.fetchone()["n"]
-
         cur.execute("SELECT AVG(experience_ans) AS m FROM candidats WHERE statut='actif'")
         moy = cur.fetchone()["m"]
-        stats["experience_moyenne"] = round(float(moy), 1) if moy else 0
-
-        cur.execute("""
-            SELECT ville, COUNT(*) AS n FROM candidats
-            WHERE statut='actif' GROUP BY ville ORDER BY n DESC LIMIT 3
-        """)
-        stats["top_villes"] = [f"{r['ville']} ({r['n']})" for r in cur.fetchall()]
+        stats["exp_moyenne"] = round(float(moy), 1) if moy else 0
+        cur.execute("SELECT ville, COUNT(*) AS n FROM candidats WHERE statut='actif' "
+                    "GROUP BY ville ORDER BY n DESC LIMIT 3")
+        stats["top_villes"] = [f"{r['ville']}({r['n']})" for r in cur.fetchall() if r['ville']]
     finally:
-        cur.close()
-        db.close()
+        cur.close(); db.close()
 
-    reponse = appeler_groq(
-        messages = [{"role": "user", "content": (
-            f"Stats recrutement : {json.dumps(stats, ensure_ascii=False)}\n"
-            f"Question : {question}\n"
-            "Reponds en francais en 3 phrases maximum."
+    return groq_appel(
+        messages=[{"role": "user", "content": (
+            f"Stats RH: {json.dumps(stats, ensure_ascii=False)}\n"
+            f"Question: {question}\nRéponds en français, 2-3 phrases max."
         )}],
-        max_tokens = 150,
+        max_tokens=150,
+        temperature=0.2,
+    ).strip()
+
+
+# ================================================================
+#  EXTRACTION TEXTE CV
+# ================================================================
+
+def extraire_texte_pdf(chemin: str) -> str:
+    texte = ""
+    try:
+        import pdfplumber
+        with pdfplumber.open(chemin) as pdf:
+            for page in pdf.pages:
+                t = page.extract_text()
+                if t: texte += t + "\n"
+    except Exception as e:
+        log.warning(f"pdfplumber: {e}")
+    if len(texte.strip()) < 50:
+        try:
+            from pdf2image import convert_from_path
+            import pytesseract
+            if TESSERACT_CMD: pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
+            for img in convert_from_path(chemin, dpi=200):
+                texte += pytesseract.image_to_string(img, lang="fra+eng") + "\n"
+        except Exception as e:
+            log.warning(f"OCR PDF: {e}")
+    return texte.strip()
+
+def extraire_texte_docx(chemin: str) -> str:
+    texte = ""
+    try:
+        from docx import Document
+        doc = Document(chemin)
+        for p in doc.paragraphs: texte += p.text + "\n"
+        for t in doc.tables:
+            for r in t.rows: texte += " ".join(c.text for c in r.cells) + "\n"
+    except Exception as e:
+        log.warning(f"docx: {e}")
+    return texte.strip()
+
+def extraire_texte_fichier(chemin_rel: str) -> str:
+    chemin = os.path.join(RACINE_PROJET, chemin_rel.lstrip("/\\"))
+    if not os.path.exists(chemin):
+        log.error(f"Fichier introuvable: {chemin}")
+        return ""
+    ext = Path(chemin).suffix.lower()
+    if ext == ".pdf":                  return extraire_texte_pdf(chemin)
+    if ext in (".docx", ".doc"):       return extraire_texte_docx(chemin)
+    if ext in (".jpg", ".jpeg", ".png"):
+        try:
+            import pytesseract; from PIL import Image
+            if TESSERACT_CMD: pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
+            return pytesseract.image_to_string(Image.open(chemin), lang="fra+eng").strip()
+        except Exception as e:
+            log.warning(f"OCR image: {e}"); return ""
+    return ""
+
+
+# ================================================================
+#  GROQ — ANALYSE CV (utilisé uniquement à l'upload, pas à chaque recherche)
+# ================================================================
+
+PROMPT_ANALYSE_CV = """Analyse ce CV. Retourne UNIQUEMENT ce JSON :
+{
+  "poste_principal": "intitulé",
+  "experience_ans": 0,
+  "competences": ["c1","c2"],
+  "villes_mentions": ["ville1"],
+  "formations": ["diplome - ecole"],
+  "langues": ["Français"],
+  "secteurs": ["secteur"],
+  "resume_enrichi": "3-5 phrases sur compétences, expériences, villes, formations"
+}"""
+
+def groq_analyser_cv(texte: str, info: dict) -> dict:
+    prompt = (
+        f"{PROMPT_ANALYSE_CV}\n\n"
+        f"Candidat: {info.get('prenom','')} {info.get('nom','')}\n"
+        f"CV:\n---\n{texte[:5000]}\n---"
     )
-    return reponse
+    contenu = groq_appel(
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=700,
+        temperature=0.1,
+        json_mode=True,
+    )
+    try:
+        return json.loads(nettoyer_json(contenu))
+    except Exception as e:
+        log.error(f"Analyse CV JSON: {e}")
+        return {}
+
+def fusionner_competences(ex: str, nv: str) -> str:
+    connus = {c.strip().lower() for c in ex.split(",") if c.strip()}
+    res    = [c for c in ex.split(",") if c.strip()]
+    for c in nv.split(","):
+        if c.strip() and c.strip().lower() not in connus:
+            res.append(c.strip()); connus.add(c.strip().lower())
+    return ", ".join(res)
+
+def sauvegarder_analyse(cur, cv_id, candidat_id, donnees, comp_ex, bio_ex):
+    resume = donnees.get("resume_enrichi", "")
+    comp   = fusionner_competences(comp_ex or "", ", ".join(donnees.get("competences", [])))
+    resume_ia = (
+        f"POSTE: {donnees.get('poste_principal','')}\n"
+        f"SECTEURS: {', '.join(donnees.get('secteurs',[]))}\n"
+        f"VILLES: {', '.join(donnees.get('villes_mentions',[]))}\n"
+        f"FORMATIONS: {', '.join(donnees.get('formations',[]))}\n"
+        f"LANGUES: {', '.join(donnees.get('langues',[]))}\n"
+        f"RESUME: {resume}"
+    )
+    cur.execute("UPDATE cv SET statut_analyse='analyse', resume_ia=%s WHERE id=%s",
+                (resume_ia, cv_id))
+    cur.execute("""
+        UPDATE candidats SET competences=%s,
+            bio=COALESCE(NULLIF(bio,''),%s),
+            poste_actuel=COALESCE(NULLIF(poste_actuel,''),%s),
+            experience_ans=CASE WHEN experience_ans IS NULL OR experience_ans=0
+                           THEN %s ELSE experience_ans END
+        WHERE id=%s
+    """, (comp, resume, donnees.get("poste_principal",""),
+          int(donnees.get("experience_ans",0)), candidat_id))
+
+def analyser_cv_batch() -> int:
+    db  = get_db(); cur = db.cursor(dictionary=True)
+    cur.execute("""
+        SELECT cv.id AS cv_id, cv.chemin, cv.candidat_id,
+               c.prenom, c.nom, c.poste_actuel, c.ville, c.competences, c.bio
+        FROM cv JOIN candidats c ON c.id=cv.candidat_id
+        WHERE cv.statut_analyse='en_attente' AND cv.chemin IS NOT NULL LIMIT 10
+    """)
+    cvs = cur.fetchall(); nb = 0
+    for cv in cvs:
+        texte = extraire_texte_fichier(cv["chemin"])
+        if not texte:
+            cur.execute("UPDATE cv SET statut_analyse='erreur' WHERE id=%s", (cv["cv_id"],))
+            db.commit(); continue
+        try:
+            donnees = groq_analyser_cv(texte, cv)
+        except HTTPException:
+            break
+        if donnees:
+            sauvegarder_analyse(cur, cv["cv_id"], cv["candidat_id"], donnees,
+                                cv.get("competences") or "", cv.get("bio") or "")
+            db.commit(); nb += 1
+    cur.close(); db.close()
+    return nb
 
 
-# ────────────────────────────────────────────────────────────────
-#  ENDPOINTS
-# ────────────────────────────────────────────────────────────────
+# ================================================================
+#  ENDPOINT PRINCIPAL — /ask
+#
+#  FLUX :
+#  1. Python classifie la question (0 token Groq)
+#  2. Python extrait les critères (0 token Groq)
+#  3. Python construit le SQL (0 token Groq)
+#  4. Python exécute le SQL sur MySQL
+#  5. Groq score chaque candidat trouvé (N tokens)
+#  6. Groq formule la réponse (1 appel)
+#
+#  Si 0 résultat : Python élargit le SQL et réessaie automatiquement.
+# ================================================================
 
 @app.post("/ask", tags=["IA"])
 @app.post("/agent", tags=["IA"])
 async def ask(body: RequeteChat):
-    """
-    Point d'entree principal.
-    3 etapes : comprendre -> chercher en base -> scorer avec Groq.
-    """
     question = body.question.strip()
     if not question:
         raise HTTPException(400, "Question vide.")
 
-    log.info(f"/ask : '{question[:60]}'")
+    log.info(f"/ask — '{question[:70]}'")
 
-    # Etape 1 : Comprendre la question
-    intention = comprendre_question(question, body.historique_chat)
-    type_msg  = intention.get("type", "conversation")
-    log.info(f"Type detecte : {type_msg}")
+    # ── Étape 1 : Classification Python ──────────────────────────
+    question_norm = normaliser_question(question)
+    intention     = classifier_intention(question_norm)
+    log.info(f"Intention Python: {intention} | Normalisée: {question_norm[:60]}")
 
-    # Cas conversation
-    if type_msg == "conversation":
-        reponse = intention.get("reponse_directe") or (
-            "Bonjour ! Decrivez le profil que vous recherchez. "
-            "Exemple : developpeur Python 3 ans experience Abidjan."
-        )
+    if intention == "conversation":
         return {"success": True, "type": "conversation",
-                "reponse": reponse, "results": [], "sql_generated": ""}
+                "reponse": (
+                    "Bonjour ! Décrivez le profil recherché. "
+                    "Exemple : développeur PHP 3 ans Abidjan, "
+                    "ou : commercial marketing disponible immédiatement."
+                ),
+                "results": [], "sql_generated": ""}
 
-    # Cas statistiques
-    if type_msg == "statistique":
+    if intention == "statistique":
         return {"success": True, "type": "statistique",
                 "reponse": repondre_statistiques(question),
                 "results": [], "sql_generated": ""}
 
-    # Cas recherche
-    criteres            = intention.get("criteres", {})
-    question_propre     = intention.get("requete_normalisee", question)
-    ville_cible         = criteres.get("ville", "")
+    # ── Étape 2 : Extraction critères Python ─────────────────────
+    criteres = extraire_criteres(question_norm, question)
+    log.info(f"Critères: poste={criteres.get('poste')} | ville={criteres.get('ville')} | "
+             f"genre={criteres.get('genre')} | exp_min={criteres.get('exp_min')} | "
+             f"prenom_nom={criteres.get('prenom_nom')} | "
+             f"mots_cles={criteres.get('mots_cles_libres')}")
 
-    # Etape 2 : SQL en Python pur (zero erreur MariaDB)
-    sql = construire_sql(criteres)
-    log.info(f"SQL construit, execution...")
+    # ── Étape 3 : SQL Python ──────────────────────────────────────
+    sql    = construire_sql(criteres)
+    elargi = False
+    log.info(f"SQL strict prêt")
 
+    # ── Étape 4 : Exécution SQL ───────────────────────────────────
     try:
         db  = get_db()
         cur = db.cursor(dictionary=True)
         cur.execute(sql)
         candidats = cur.fetchall()
-        cur.close()
-        db.close()
+        cur.close(); db.close()
     except mysql.connector.Error as e:
-        log.error(f"SQL erreur : {e}")
-        raise HTTPException(500, f"Erreur base de donnees : {e}")
+        log.error(f"SQL erreur: {e}\nSQL: {sql}")
+        raise HTTPException(500, f"Erreur base de données: {e}")
 
-    log.info(f"{len(candidats)} candidat(s) trouve(s)")
+    log.info(f"{len(candidats)} candidat(s) — SQL strict")
 
-    # Etape 3 : Scorer chaque candidat
+    # ── Fallback : SQL élargi si 0 résultat ──────────────────────
+    if not candidats and (criteres.get("poste") or criteres.get("prenom_nom")
+                           or criteres.get("mots_cles_libres")):
+        sql_elargi = construire_sql_elargi(criteres)
+        try:
+            db  = get_db()
+            cur = db.cursor(dictionary=True)
+            cur.execute(sql_elargi)
+            candidats = cur.fetchall()
+            cur.close(); db.close()
+            if candidats:
+                elargi = True
+                log.info(f"{len(candidats)} candidat(s) — SQL élargi")
+                sql = sql_elargi
+        except mysql.connector.Error as e:
+            log.warning(f"SQL élargi erreur: {e}")
+
+    # ── Étape 5 : Scoring Groq ────────────────────────────────────
     resultats = []
     for cand in candidats:
-        c = serialiser(dict(cand))
-        score, resume = scorer_candidat(c, question_propre, ville_cible)
+        c     = propre(dict(cand))
+        score, resume = groq_scorer(c, question_norm, criteres)
         if score >= SCORE_MIN:
             resultats.append({
                 **c,
@@ -683,20 +980,14 @@ async def ask(body: RequeteChat):
                 "resume_ia":  resume,
                 "nom":        f"{c.get('prenom','')} {c.get('nom','')}".strip(),
                 "profession": c.get("poste_actuel", ""),
-                "experience": f"{c.get('experience_ans', 0)} ans",
+                "experience": f"{c.get('experience_ans',0)} ans",
             })
 
     resultats.sort(key=lambda x: x["score"], reverse=True)
     nb = len(resultats)
 
-    if nb > 0:
-        reponse = f"J'ai trouve {nb} candidat{'s' if nb > 1 else ''} pour : {question_propre}."
-    else:
-        reponse = (
-            "Aucun candidat trouve. "
-            "Verifiez que les CV ont ete analyses (POST /analyser-cv-en-attente) "
-            "ou elargissez vos criteres."
-        )
+    # ── Étape 6 : Réponse Groq ────────────────────────────────────
+    reponse = groq_reponse_naturelle(question_norm, nb, criteres, elargi)
 
     return {
         "success":       True,
@@ -708,173 +999,152 @@ async def ask(body: RequeteChat):
     }
 
 
-@app.post("/analyser-cv-en-attente", tags=["CV"])
-async def endpoint_analyser_cv_en_attente():
-    """Analyse les CV en attente (statut='en_attente'). A appeler apres chaque upload."""
-    nb = analyser_cv_en_attente()
-    return {
-        "success": True,
-        "traites": nb,
-        "message": f"{nb} CV analyse(s)." if nb > 0 else "Aucun CV en attente.",
-    }
+# ================================================================
+#  ENDPOINTS CV
+# ================================================================
 
-
-@app.post("/analyser-cv-fichier", tags=["CV"])
-async def endpoint_analyser_cv_fichier(body: RequeteAnalyserFichier):
-    """Analyse immediatement un CV specifique. A appeler depuis PHP apres upload."""
-    db  = get_db()
-    cur = db.cursor(dictionary=True)
-    cur.execute("SELECT * FROM candidats WHERE id = %s", (body.candidat_id,))
+@app.post("/cv-uploade", tags=["CV"])
+async def cv_uploade(body: RequeteUploadCV):
+    """Analyse automatique après upload PHP."""
+    db  = get_db(); cur = db.cursor(dictionary=True)
+    cur.execute("SELECT * FROM candidats WHERE id=%s", (body.candidat_id,))
     candidat = cur.fetchone()
     if not candidat:
         cur.close(); db.close()
         raise HTTPException(404, f"Candidat #{body.candidat_id} introuvable.")
+    cur.execute("SELECT id FROM cv WHERE candidat_id=%s ORDER BY date_upload DESC LIMIT 1",
+                (body.candidat_id,))
+    cv_row = cur.fetchone()
+    if not cv_row:
+        cur.close(); db.close()
+        raise HTTPException(404, "Aucun CV trouvé.")
+    texte = extraire_texte_fichier(body.chemin_cv)
+    if not texte:
+        cur.execute("UPDATE cv SET statut_analyse='erreur' WHERE id=%s", (cv_row["id"],))
+        db.commit(); cur.close(); db.close()
+        return {"success": False, "message": f"Fichier illisible: {body.chemin_cv}"}
+    donnees = groq_analyser_cv(texte, dict(candidat))
+    if not donnees:
+        cur.execute("UPDATE cv SET statut_analyse='erreur' WHERE id=%s", (cv_row["id"],))
+        db.commit(); cur.close(); db.close()
+        return {"success": False, "message": "Analyse Groq échouée."}
+    sauvegarder_analyse(cur, cv_row["id"], body.candidat_id, donnees,
+                        candidat.get("competences") or "", candidat.get("bio") or "")
+    db.commit(); cur.close(); db.close()
+    log.info(f"✅ CV analysé — candidat #{body.candidat_id}: {donnees.get('poste_principal','?')}")
+    return {"success": True,
+            "message": f"CV analysé: {donnees.get('poste_principal','?')}",
+            "competences": ", ".join(donnees.get("competences", [])),
+            "resume": donnees.get("resume_enrichi", "")}
 
-    texte = lire_fichier_cv(body.chemin_cv)
+
+@app.post("/analyser-cv-en-attente", tags=["CV"])
+async def analyser_cv_en_attente():
+    nb = analyser_cv_batch()
+    return {"success": True, "traites": nb,
+            "message": f"{nb} CV analysé(s)." if nb else "Aucun CV en attente."}
+
+
+@app.post("/analyser-cv-fichier", tags=["CV"])
+async def analyser_cv_fichier(body: RequeteAnalyserFichier):
+    db  = get_db(); cur = db.cursor(dictionary=True)
+    cur.execute("SELECT * FROM candidats WHERE id=%s", (body.candidat_id,))
+    candidat = cur.fetchone()
+    if not candidat:
+        cur.close(); db.close()
+        raise HTTPException(404, f"Candidat #{body.candidat_id} introuvable.")
+    cur.execute("SELECT id FROM cv WHERE candidat_id=%s ORDER BY date_upload DESC LIMIT 1",
+                (body.candidat_id,))
+    cv_row = cur.fetchone()
+    if not cv_row:
+        cur.close(); db.close()
+        raise HTTPException(404, "Aucun CV trouvé.")
+    texte = extraire_texte_fichier(body.chemin_cv)
     if not texte:
         cur.close(); db.close()
-        return {"success": False, "message": "Impossible de lire le fichier CV."}
-
-    donnees = analyser_cv_avec_groq(texte, dict(candidat))
+        return {"success": False, "message": f"Illisible: {body.chemin_cv}"}
+    donnees = groq_analyser_cv(texte, dict(candidat))
     if not donnees:
         cur.close(); db.close()
-        return {"success": False, "message": "Analyse Groq echouee."}
-
-    resume_ia = (
-        f"POSTE: {donnees.get('poste', '')}\n"
-        f"SECTEURS: {', '.join(donnees.get('secteurs', []))}\n"
-        f"VILLES: {', '.join(donnees.get('villes', []))}\n"
-        f"FORMATIONS: {', '.join(donnees.get('formations', []))}\n"
-        f"LANGUES: {', '.join(donnees.get('langues', []))}\n"
-        f"RESUME: {donnees.get('resume', '')}"
-    )
-
-    competences = fusionner_competences(
-        candidat.get("competences") or "",
-        donnees.get("competences", [])
-    )
-
-    cur.execute(
-        "UPDATE cv SET statut_analyse='analyse', resume_ia=%s "
-        "WHERE candidat_id=%s ORDER BY date_upload DESC LIMIT 1",
-        (resume_ia, body.candidat_id)
-    )
-    cur.execute("""
-        UPDATE candidats
-        SET competences    = %s,
-            bio            = IF(bio IS NULL OR bio='', %s, bio),
-            poste_actuel   = IF(poste_actuel IS NULL OR poste_actuel='', %s, poste_actuel),
-            experience_ans = IF(experience_ans=0 OR experience_ans IS NULL, %s, experience_ans)
-        WHERE id = %s
-    """, (
-        competences,
-        donnees.get("resume", ""),
-        donnees.get("poste", ""),
-        int(donnees.get("experience_ans", 0)),
-        body.candidat_id,
-    ))
+        return {"success": False, "message": "Analyse échouée."}
+    sauvegarder_analyse(cur, cv_row["id"], body.candidat_id, donnees,
+                        candidat.get("competences") or "", candidat.get("bio") or "")
     db.commit(); cur.close(); db.close()
-
-    return {
-        "success":     True,
-        "message":     f"CV analyse : {donnees.get('poste','?')} — {len(donnees.get('competences',[]))} competences",
-        "competences": competences,
-        "resume":      donnees.get("resume", ""),
-    }
+    return {"success": True,
+            "message": f"CV analysé: {donnees.get('poste_principal','?')}",
+            "competences": ", ".join(donnees.get("competences", [])),
+            "resume": donnees.get("resume_enrichi", "")}
 
 
-@app.post("/extraire-cv", tags=["CV"])
-async def extraire_cv(body: RequeteExtractionCV):
-    """Legacy : analyse depuis texte brut. Preferer /analyser-cv-fichier."""
-    if not body.texte_cv.strip():
-        raise HTTPException(400, "Texte CV vide.")
-    donnees = analyser_cv_avec_groq(body.texte_cv, {})
-    if not donnees:
-        raise HTTPException(500, "Analyse echouee.")
+# ================================================================
+#  ENDPOINTS UTILITAIRES
+# ================================================================
 
-    db  = get_db()
-    cur = db.cursor()
-    cur.execute(
-        "UPDATE candidats SET poste_actuel=%s, experience_ans=%s, competences=%s, bio=%s WHERE id=%s",
-        (donnees.get("poste",""), int(donnees.get("experience_ans",0)),
-         ", ".join(donnees.get("competences",[])), donnees.get("resume",""), body.candidat_id)
-    )
-    cur.execute(
-        "UPDATE cv SET statut_analyse='analyse', resume_ia=%s "
-        "WHERE candidat_id=%s ORDER BY date_upload DESC LIMIT 1",
-        (donnees.get("resume",""), body.candidat_id)
-    )
-    db.commit(); cur.close(); db.close()
-    return {"success": True, "donnees": donnees}
-
-
-@app.get("/cvs", tags=["Donnees"])
+@app.get("/cvs", tags=["Données"])
 async def get_all_cvs(limit: int = 100):
     try:
-        db  = get_db()
-        cur = db.cursor(dictionary=True)
+        db  = get_db(); cur = db.cursor(dictionary=True)
         cur.execute("""
             SELECT c.id, c.prenom, c.nom, c.email, c.ville, c.poste_actuel,
                    c.experience_ans, c.competences, c.photo,
                    cv.chemin AS cv_chemin, cv.nom_fichier AS cv_nom, cv.resume_ia
             FROM candidats c
-            LEFT JOIN cv ON cv.id = (
-                SELECT id FROM cv WHERE candidat_id = c.id ORDER BY date_upload DESC LIMIT 1
-            )
-            WHERE c.statut = 'actif'
-            ORDER BY c.date_inscription DESC
-            LIMIT %s
+            LEFT JOIN cv ON cv.id=(SELECT id FROM cv WHERE candidat_id=c.id
+                                   ORDER BY date_upload DESC LIMIT 1)
+            WHERE c.statut='actif' ORDER BY c.date_inscription DESC LIMIT %s
         """, (limit,))
-        rows = [serialiser(r) for r in cur.fetchall()]
+        rows = [propre(r) for r in cur.fetchall()]
         cur.close(); db.close()
         return {"success": True, "count": len(rows), "cvs": rows}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 
-@app.get("/sante", tags=["Systeme"])
+@app.get("/sante", tags=["Système"])
 async def sante():
-    bd_ok, cv_attente = False, 0
+    bd_ok = False; cv_attente = 0
     try:
-        db  = get_db()
-        cur = db.cursor()
+        db  = get_db(); cur = db.cursor()
         cur.execute("SELECT COUNT(*) FROM cv WHERE statut_analyse='en_attente'")
         cv_attente = cur.fetchone()[0]
-        cur.close(); db.close()
-        bd_ok = True
+        cur.close(); db.close(); bd_ok = True
     except Exception:
         pass
-    return {
-        "status":        "ok" if bd_ok else "erreur_bd",
-        "version":       "6.0",
-        "bd":            bd_ok,
-        "groq":          bool(GROQ_API_KEY),
-        "cv_en_attente": cv_attente,
-    }
+    return {"status": "ok" if bd_ok else "erreur_bd", "version": "6.0",
+            "bd": bd_ok, "groq": bool(GROQ_API_KEY),
+            "cv_en_attente": cv_attente, "racine_projet": RACINE_PROJET}
 
 
-@app.get("/", tags=["Systeme"])
+@app.get("/", tags=["Système"])
 async def root():
     return {
-        "service":    "SmartRecruit Matching IA v6",
-        "endpoints":  ["/ask", "/analyser-cv-en-attente", "/analyser-cv-fichier", "/cvs", "/sante", "/docs"],
+        "service": "SmartRecruit Matching IA v6.0",
+        "architecture": {
+            "classification": "Python pur (regex + mots-clés) — 0 token Groq",
+            "sql":            "Python pur (déterministe) — 0 token Groq",
+            "scoring":        "Groq (1 appel par candidat trouvé)",
+            "reponse":        "Groq (1 appel synthèse)",
+        },
+        "endpoints": ["/ask", "/cv-uploade", "/analyser-cv-en-attente",
+                      "/analyser-cv-fichier", "/cvs", "/sante", "/docs"],
     }
 
 
-# ────────────────────────────────────────────────────────────────
-#  DEMARRAGE
-# ────────────────────────────────────────────────────────────────
+# ================================================================
+#  DÉMARRAGE
+# ================================================================
 
 if __name__ == "__main__":
     import uvicorn
-    print("\n" + "=" * 55)
-    print("  SmartRecruit Matching IA v6")
+    print("\n" + "="*58)
+    print("  SmartRecruit Matching IA v6.0")
+    print(f"  Modèle  : {MODELE}")
     print(f"  Base    : {DB['database']}")
-    print(f"  Groq    : {'OK' if GROQ_API_KEY else 'CLE MANQUANTE dans .env'}")
     print(f"  Projet  : {RACINE_PROJET}")
+    print(f"  Groq    : {'✅' if GROQ_API_KEY else '❌ GROQ_API_KEY manquante'}")
     print("  Docs    : http://localhost:5001/docs")
-    print("=" * 55)
+    print("="*58)
     print("\n  Analyse des CV en attente...")
-    nb = analyser_cv_en_attente()
-    print(f"  {nb} CV analyse(s)\n")
+    nb = analyser_cv_batch()
+    print(f"  {'✅ '+str(nb)+' CV analysé(s)' if nb else 'ℹ️  Aucun CV en attente'}\n")
     uvicorn.run("matching_service:app", host="0.0.0.0", port=5001, reload=True)
