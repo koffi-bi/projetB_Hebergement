@@ -17,9 +17,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Télécharger le modèle français medium de spaCy
 RUN pip install https://github.com/explosion/spacy-models/releases/download/fr_core_news_md-3.7.0/fr_core_news_md-3.7.0-py3-none-any.whl
-
+# copier le code
+COPY matching_service.py .
+# port exposé
+EXPOSE 10000
 # Copier le code source
 COPY . .
 
 # Commande de démarrage
-CMD uvicorn app:app --host 0.0.0.0 --port $PORT
+CMD ["sh", "-c", "uvicorn matching_service:app --host 0.0.0.0 --port
+${PORT:-10000"]
+EOF
+echo "@ Dockerfile"
