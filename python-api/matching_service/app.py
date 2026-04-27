@@ -1018,7 +1018,7 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     print("\n" + "="*60)
-    print("  SmartRecruit Matching IA v7.2")
+    print("  CvMatchIA Matching IA v7.2")
     print(f"  Base      : {DB['database']}")
     print(f"  Groq      : {'✅' if GROQ_API_KEY else '❌ clé manquante'}")
     print(f"  Cloudinary: ✅ URLs http/https supportées nativement")
@@ -1028,4 +1028,4 @@ if __name__ == "__main__":
     print("\n  Analyse des CV en attente...")
     nb = analyser_cv_batch()
     print(f"  {'✅ '+str(nb)+' CV(s) analysé(s)' if nb else 'ℹ️  Aucun CV en attente'}\n")
-    uvicorn.run("matching_service:app", host="0.0.0.0", port=5001, reload=True)
+    uvicorn.run("app.py:app", host="0.0.0.0", port=5001, reload=True)
