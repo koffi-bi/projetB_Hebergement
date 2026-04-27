@@ -1,34 +1,3 @@
-# ================================================================
-#  SmartRecruit — Microservice Matching IA (Groq) v7.2
-#  Fichier : python/matching_service.py
-#
-#  NOUVEAUTÉS v7.2 — ADAPTATION CLOUDINARY + RENDER :
-#    ✅ extraire_texte_fichier() gère les URLs Cloudinary (http/https)
-#       ET les chemins locaux — sans appel à extraire_texte_local()
-#       qui n'existait pas (bug corrigé)
-#    ✅ Téléchargement du fichier depuis Cloudinary dans /tmp (éphémère)
-#       puis extraction du texte avec pdfplumber / python-docx
-#    ✅ Support du champ cloudinary_url dans RequeteUploadCV
-#    ✅ /cv-uploade accepte désormais l'URL Cloudinary directement
-#    ✅ analyser_cv_batch() télécharge depuis l'URL Cloudinary stockée
-#       dans cv.chemin si celle-ci commence par http
-#    ✅ Timeout généreux (60s) pour le téléchargement Cloudinary
-#
-#  NOUVEAUTÉS v7.1 :
-#    ✅ CV de proposition retournés dans la réponse JSON (champ "propositions")
-#    ✅ Recherche par nom insensible aux accents (Doué → Doue, etc.)
-#
-#  NOUVEAUTÉ v7 :
-#    ✅ texte_complet stocké en base (MEDIUMTEXT + FULLTEXT)
-#    ✅ Classification + SQL 100% Python (0 token Groq)
-#    ✅ Fallback SQL élargi si 0 résultat
-#
-#  PRÉREQUIS BDD :
-#    ALTER TABLE cv ADD COLUMN texte_complet MEDIUMTEXT NULL AFTER resume_ia;
-#    ALTER TABLE cv ADD FULLTEXT INDEX ft_texte_complet (texte_complet);
-#
-#  Lancer : uvicorn matching_service:app --host 0.0.0.0 --port 5001 --reload
-# ================================================================
 
 import os, re, json, time, logging, unicodedata, tempfile
 from datetime import datetime
