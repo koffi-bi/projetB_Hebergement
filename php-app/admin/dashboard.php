@@ -14,7 +14,7 @@ $admin_id  = $_SESSION['admin_id'];
 $admin_nom = $_SESSION['admin_nom'] ?? 'Administrateur';
 $pdo       = connexionDB();
 
-define('API_GROQ_URL', getenv('MATCHING_API_URL') ?: 'http://localhost:5001');
+define('API_GROQ_URL', 'http://localhost:5001');
 
 $stmtAdmin = $pdo->prepare("SELECT * FROM administrateurs WHERE id = ?");
 $stmtAdmin->execute([$admin_id]);
@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard CvMatchIA</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="dashboard.css?v=1.1">
+  <link rel="stylesheet" href="dashboard.css">
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
   <!-- Lucide Icons — icônes professionnelles légères -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
@@ -791,7 +791,9 @@ async function envoyerAgent() {
     if (data.results && data.results.length > 0) {
       resultatsActuels = data.results;
       afficherResultats(resultatsActuels, data.sql_generated, question);
-    }
+    }else if (data.propositions.length > 0) {
+    // afficher data.propositions (CV suggérés-ligne 795-je vien de modifier)
+}
   } catch(e) {
     ajouterMsgIA(`Erreur : ${e.message}`);
   }

@@ -11,6 +11,15 @@
 *credential*
 
 # ============================================
+# DOSSIERS D'UPLOAD (CVs, PHOTOS DES CANDIDATS)
+# ============================================
+php-app/uploads/
+php-app/cv_uploads/
+uploads/
+*.pdf
+*.docx
+
+# ============================================
 # ENVIRONNEMENTS VIRTUELS PYTHON
 # ============================================
 venv/
@@ -89,3 +98,9 @@ session_tmp/
 # Fichiers de cache
 cache/
 *.cache
+
+# Chemin racine de votre projet (pour lire les fichiers CV)
+RACINE_PROJET=C:\xampp\htdocs\ProjetB
+
+# Optionnel : URL du service matching (pour les appels internes)
+MATCHING_API_URL=http://localhost:5001

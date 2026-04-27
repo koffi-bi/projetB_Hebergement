@@ -1,7 +1,14 @@
 <?php
 // ================================================================
-//  — Inscription Administrateur (sans Face ID intégré)
-//  L'activation Face ID se fait après, via register_face.php
+//  SmartRecruit — Inscription Administrateur
+//  Fichier : admin/register.php
+//
+//  FLUX :
+//  1. L'admin remplit le formulaire (prénom, nom, email, mdp)
+//  2. Il clique "Activer Face ID" → JS appelle Python /enregistrer-visage
+//     Python ouvre la webcam, capture le visage, renvoie l'encoding (128 floats)
+//  3. L'encoding est stocké dans le champ caché #face_encoding_input
+//  4. Soumission du formulaire → PHP insère tout en base MySQL
 // ================================================================
 require_once '../config/config.php';
 require_once '../config/admin_auth.php';
@@ -18,6 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $email         = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
   $mdp           = $_POST['mot_de_passe']           ?? '';
   $mdp2          = $_POST['mdp_confirm']            ?? '';
+  $face_encoding = $_POST['face_encoding']          ?? '';
+  $face_id_actif = !empty($face_encoding) ? 1 : 0;
   $ancienne      = compact('prenom','nom','email');
 
   if (empty($prenom))  $erreurs[] = 'Le prénom est obligatoire.';
@@ -35,13 +44,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   if (empty($erreurs)) {
     $hash = password_hash($mdp, PASSWORD_BCRYPT);
-    $stmt = $pdo->prepare("INSERT INTO administrateurs (prenom, nom, email, mot_de_passe) VALUES (?, ?, ?, ?)");
-    $stmt->execute([$prenom, $nom, $email, $hash]);
-    $admin_id = $pdo->lastInsertId();
-    $_SESSION['admin_id']  = $admin_id;
+    $pdo->prepare("INSERT INTO administrateurs (prenom, nom, email, mot_de_passe, face_encoding, face_id_actif) VALUES (?, ?, ?, ?, ?, ?)")
+        ->execute([$prenom, $nom, $email, $hash, $face_encoding, $face_id_actif]);
+    $_SESSION['admin_id']  = $pdo->lastInsertId();
     $_SESSION['admin_nom'] = $prenom . ' ' . $nom;
-    // Redirection vers l'activation Face ID
-    rediriger('register_face.php');
+    rediriger('login.php?inscription=ok');
   }
 }
 ?>
@@ -50,19 +57,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inscription Recruteur — cvmatchIA</title>
+  <title>Inscription Recruteur — SmartRecruit</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="register.css">
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+    
 </head>
 <body>
 <div class="auth-wrapper">
 
-  <!-- PANNEAU GAUCHE (inchangé) -->
+  <!-- PANNEAU GAUCHE -->
   <div class="auth-panneau">
     <a href="../index.php" class="auth-logo">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1D6FEB" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-      CvMatch<span>IA</span>
+      Smart<span>Recruit</span>
     </a>
     <div class="badge-securite">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -78,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </ul>
   </div>
 
-  <!-- FORMULAIRE DROITE (sans le bloc Face ID) -->
+  <!-- FORMULAIRE DROITE -->
   <div class="auth-formulaire">
     <h1 class="form-titre">Créer un compte recruteur</h1>
     <p class="form-sous-titre">Accès au Dashboard Administrateur</p>
@@ -130,6 +139,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <input type="password" id="mdp_confirm" name="mdp_confirm" placeholder="••••••••" required>
         </div>
 
+        <!-- ── BLOC FACE ID ── -->
+        <div class="faceid-bloc">
+          <div class="faceid-entete">
+            <div class="faceid-icone-wrap">
+              <!-- Icône scan visage (cadre + yeux + bouche) = Face ID -->
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1D6FEB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+                <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                <line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
+              </svg>
+            </div>
+            <div class="faceid-info">
+              <h4>Authentification Face ID</h4>
+              <p>Facultatif. Activez pour vous connecter par reconnaissance faciale.</p>
+            </div>
+          </div>
+
+          <!-- Statut de la capture (affiché par face_id.js) -->
+          <div id="faceid-statut" class="faceid-statut"></div>
+
+          <!-- Bouton qui déclenche activerFaceID() dans face_id.js -->
+          <button type="button" id="btn-faceid" class="btn-faceid" onclick="activerFaceID()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#78AAFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            Activer Face ID
+          </button>
+
+          <!-- Champ caché : PHP lit face_encoding via $_POST['face_encoding'] -->
+          <input type="hidden" id="face_encoding_input" name="face_encoding" value="">
+        </div>
+
       </div>
 
       <button type="submit" class="btn-principal">
@@ -143,5 +186,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </div>
 
 </div>
+
+<!-- Script Face ID partagé (gère activerFaceID) -->
+<script src="face_id.js"></script>
 </body>
 </html>

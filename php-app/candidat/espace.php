@@ -543,7 +543,6 @@ if ($cv_existant) $pct_profil = min(100, $pct_profil + 14);
         <form method="POST" action="upload_cv.php" enctype="multipart/form-data" id="form-step3">
           <input type="hidden" name="action" value="uploader_cv">
 
-
           <!-- GRILLE 2 COLONNES : Photo | CV -->
           <div style="display:grid;grid-template-columns:200px 1fr;gap:24px;align-items:start;margin-bottom:20px;">
 
