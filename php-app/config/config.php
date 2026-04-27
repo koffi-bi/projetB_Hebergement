@@ -80,6 +80,6 @@ function nettoyer(string $valeur): string {
 }
 
 // Configuration Cloudinary
-define('CLOUDINARY_CLOUD_NAME', 'dvd3bmsri'); // À récupérer sur cloudinary.com
-define('CLOUDINARY_API_KEY', '851383611145189');
-define('CLOUDINARY_API_SECRET', 'nqL_JWjXSwgEKToL3DyKyRP94rA');
+define('CLOUDINARY_CLOUD_NAME', '............'); // À récupérer sur cloudinary.com
+define('CLOUDINARY_API_KEY', '..............');
+define('CLOUDINARY_API_SECRET', '........................');
