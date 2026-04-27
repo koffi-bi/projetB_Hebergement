@@ -2,7 +2,7 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 
-# Extraction de texte et traitement des CV
+# Extraction de texte
 PyPDF2==3.0.0
 pdfplumber==0.11.0
 pdf2image==1.16.0
@@ -26,9 +26,5 @@ python-multipart==0.0.12
 # Traitement de données
 numpy==1.26.4
 
-# Logging amélioré
+# Logging
 loguru==0.7.2
-
-# Utilitaires supplémentaires
-urllib3==2.2.0
-certifi==2024.2.2
